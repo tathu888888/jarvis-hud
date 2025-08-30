@@ -19,4 +19,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
+// import React from "react";
+// import { createRoot } from "react-dom/client";
+// import NewsHUD from "./NewsHUD.jsx";
+
+// createRoot(document.getElementById("root")).render(
+//   <React.StrictMode>
+//     <NewsHUD />
+//   </React.StrictMode>
+// );
 

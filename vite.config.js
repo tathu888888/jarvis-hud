@@ -1,32 +1,56 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { fileURLToPath } from "url";
-import { dirname, resolve } from "path";
-import dotenv from "dotenv";
-
-dotenv.config(); // .env の OPENAI_API_KEY を読み込む
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { resolve } from "path";
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-    },
+    alias: { "@": resolve(__dirname, "src") },
   },
   server: {
     port: 5175,
+<<<<<<< HEAD
+=======
+    strictPort: true, // 5173 以外に逃げない
+>>>>>>> 8b8b0f5e13e2c8b69fd9ec47e0111191ccdfb2d7
     proxy: {
       "/api": {
         target: "http://localhost:8888",
         changeOrigin: true,
-        // 必要ならパスを書き換え:
-        // rewrite: (p) => p.replace(/^\/api/, "/api"),
       },
     },
   },
 });
+
+// import { defineConfig } from "vite";
+// import react from "@vitejs/plugin-react";
+// import { fileURLToPath } from "url";
+// import { dirname, resolve } from "path";
+// import dotenv from "dotenv";
+
+// dotenv.config(); // .env の OPENAI_API_KEY を読み込む
+
+// const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// export default defineConfig({
+//   plugins: [react()],
+//   resolve: {
+//     alias: {
+//       "@": resolve(__dirname, "src"),
+//     },
+//   },
+//   server: {
+//     port: 5173,
+//     proxy: {
+//       "/api": {
+//         target: "http://localhost:8888",
+//         changeOrigin: true,
+//         // 必要ならパスを書き換え:
+//         // rewrite: (p) => p.replace(/^\/api/, "/api"),
+//       },
+//     },
+//   },
+// });
 // import { defineConfig } from "vite";
 // import react from "@vitejs/plugin-react";
 // import { fileURLToPath } from "url";
