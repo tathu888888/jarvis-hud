@@ -1,4 +1,4 @@
-
+//試作
 
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -38,9 +38,24 @@ const FEEDS = [
   { source: "BBC World", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
   { source: "Reuters World", url: "http://feeds.reuters.com/Reuters/worldNews" },
   { source: "NHK 国際", url: "https://www3.nhk.or.jp/rss/news/cat5.xml" },
-  // 追加したい場合:
+
+  // 2ch 系
+
+
+  // 日本メディア
+  { source: "NHK 国内", url: "https://www3.nhk.or.jp/rss/news/cat0.xml" },
+  { source: "読売新聞", url: "https://www.yomiuri.co.jp/rss/yol/all.xml" },
+  // { source: "毎日新聞", url: "https://mainichi.jp/rss/etc/flash.rss" },
+  // { source: "朝日新聞", url: "https://www.asahi.com/rss/asahi/newsheadlines.rdf" },
+  // { source: "共同通信", url: "https://www.kyodo.co.jp/feed/" },
+
+//   // 海外メディア
   // { source: "CNN Top", url: "http://rss.cnn.com/rss/edition.rss" },
-  // { source: "The Verge", url: "https://www.theverge.com/rss/index.xml" },
+  { source: "NY Times World", url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" },
+  // { source: "The Guardian World", url: "https://www.theguardian.com/world/rss" },
+  { source: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" },
+  // { source: "DW World", url: "https://rss.dw.com/rdf/rss-en-world" },
+  // { source: "AP News", url: "https://apnews.com/rss" },
 ];
 
 // CORS を回避してブラウザから直接取得する軽量プロキシ（AllOrigins）
@@ -101,7 +116,7 @@ export default function NewsHUD() {
   // const [articles, setArticles] = useState([]);
 const [allArticles, setAllArticles] = useState([]);
 const [articleLimit, setArticleLimit] = useState(() => {
-  const v = Number(localStorage.getItem("articleLimit") || 100);
+  const v = Number(localStorage.getItem("articleLimit") || 500);
   return Number.isFinite(v) ? v : 100;
 });
 const [loading, setLoading] = useState(true);
@@ -174,7 +189,7 @@ setAllArticles(list);   // 変更
       value={articleLimit}
       onChange={(e) => {
         const v = Number(e.target.value);
-        setArticleLimit(Number.isFinite(v) ? v : 100);
+        setArticleLimit(Number.isFinite(v) ? v : 500);
       }}
       className="w-20 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 text-sm text-cyan-100 outline-none focus:border-cyan-300"
       title="1〜500 の範囲で指定"
