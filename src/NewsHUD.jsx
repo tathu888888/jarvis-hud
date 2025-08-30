@@ -374,16 +374,6 @@ function Metric({ label, value, unit, color }) {
   );
 }
 
-// async function annotateTitle(title) {
-//   const res = await fetch("/api/annotate", {
-//     method: "POST",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify({ title }),
-//   });
-//   if (!res.ok) throw new Error("annotate failed");
-//   const data = await res.json(); // { note: "..." }
-//   return data.note;
-// }
 
 const aiCache = new Map(); // title をキーにキャッシュ
 async function annotateTitle(title, { source, time, summary } = {}) {
@@ -409,7 +399,6 @@ async function annotateTitle(title, { source, time, summary } = {}) {
 }
 
 function pickDerivativeIndex(series) {
-
   const n = series.length;
   if (n === 0) return -1;
   if (n === 1) return 0;
@@ -429,9 +418,9 @@ function pickDerivativeIndex(series) {
 
 
 function CalculusOverview({ articles, loading }) {
+  // 30分ビン
   const BIN_MIN = 30;
 
-<<<<<<< HEAD
   // --- 既存の時系列（総露出・傾き・加速度） ---
   const series = React.useMemo(
     () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
@@ -444,26 +433,11 @@ function CalculusOverview({ articles, loading }) {
   // dV/dt・d²V/dt²の代表点（末尾側で中央差分が取れる点）
   const didx = pickDerivativeIndex(series);
   const dpoint = didx >= 0 ? series[didx] : undefined;
-=======
-  // 1) 計算用の等間隔シリーズ（記事数・∫Vdt・dV/dt 等）
-  const calcSeries = React.useMemo(
-    () => buildTimeSeries(articles || [], { binMs: BIN_MIN * 60_000 }),
-    [articles]
-  );
 
-  const has = calcSeries.length > 0;
-  const last = has ? calcSeries[calcSeries.length - 1] : undefined;
-  const exposure = Number.isFinite(last?.exposure) ? last.exposure : 0;
->>>>>>> 8b8b0f5e13e2c8b69fd9ec47e0111191ccdfb2d7
-
-  // 微分指標
-  const didx = pickDerivativeIndex(calcSeries);
-  const dpoint = didx >= 0 ? calcSeries[didx] : undefined;
   const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
-  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 3600     : 0;  // /min² → /h²
+  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
 
-<<<<<<< HEAD
-   const avgSlope = series.length > 0
+    const avgSlope = series.length > 0
     ? series.reduce((a, s) => a + (s.slope || 0), 0) / series.length * 60
     : 0;
 
@@ -504,33 +478,6 @@ function CalculusOverview({ articles, loading }) {
   console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
   console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
   console.log("[RSS] labeledSeries:", labeledSeries);
-=======
-  // 左グラフのデータ（件数をそのまま描画）
-  const binCounts = calcSeries.map((s, i) => ({ t: i, v: s.V }));
-
-  // 2) 注釈用：簡易キーワード抽出 → 時間バケット
-  const articlesWithKW = React.useMemo(() => {
-    return (articles || []).map(a => ({
-      ...a,
-      value: 1,
-      keywords: Array.isArray(a.keywords) && a.keywords.length
-        ? a.keywords
-        : String(a.title || "")
-            .split(/\W+/)
-            .filter(w => w.length >= 3)
-            .slice(0, 2),
-    }));
-  }, [articles]);
-
-  const labelSeries = React.useMemo(
-    () => buildSeriesWithLabels(articlesWithKW, { threshold: 3 }),
-    [articlesWithKW]
-  );
-
-  // デバッグ
-  console.log("[HUD] calcSeries.len=", calcSeries.length, "labelSeries.len=", labelSeries.length);
-  console.log("[HUD] exposure=", exposure, "slope(/h)=", slopePerHour, "accel(/h^2)=", accelPerHour2);
->>>>>>> 8b8b0f5e13e2c8b69fd9ec47e0111191ccdfb2d7
 
   return (
     <div className="relative z-10 px-6 pb-4">
@@ -545,25 +492,17 @@ function CalculusOverview({ articles, loading }) {
             <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
             <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
             <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-<<<<<<< HEAD
             <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
             <Metric label="平均傾き dV/dt" value={avgSlope.toFixed(2)} unit="/h" color={sparkColor(avgSlope)} />
-            <Metric label="平均加速度 d²V/dt²" value={avgAccel.toFixed(2)} unit="/h²" color={sparkColor(avgAccel)} />
+  <Metric label="平均加速度 d²V/dt²" value={avgAccel.toFixed(2)} unit="/h²" color={sparkColor(avgAccel)} /> 
           </div>
 
           <div className="mt-3 grid lg:grid-cols-2 gap-3">
             {/* 左：記事数(ビン)の推移（既存のエリアチャート） */}
-=======
-            <Metric label="記事数" value={loading ? "-" : String(articles?.length ?? 0)} />
-          </div>
-
-          <div className="mt-3 grid lg:grid-cols-2 gap-3">
-            {/* 左：記事数(ビン)の推移（calcSeries） */}
->>>>>>> 8b8b0f5e13e2c8b69fd9ec47e0111191ccdfb2d7
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={binCounts}
+                  data={binCounts.map((v, i) => ({ t: i, v }))}
                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
                 >
                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
@@ -575,7 +514,6 @@ function CalculusOverview({ articles, loading }) {
               </ResponsiveContainer>
             </div>
 
-<<<<<<< HEAD
             {/* 右：キーワード注釈つきラインチャート（スパイク点のみ表示） */}
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
@@ -584,18 +522,10 @@ function CalculusOverview({ articles, loading }) {
                   margin={{ top: 8, right: 8, left: -10, bottom: 0 }}
                 >
                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-=======
-            {/* 右：スパイク点にキーワードラベル（labelSeries） */}
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={labelSeries}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
->>>>>>> 8b8b0f5e13e2c8b69fd9ec47e0111191ccdfb2d7
                   <XAxis
                     dataKey="time"
                     tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
                   />
-<<<<<<< HEAD
                   <YAxis hide />
                   <Tooltip
                     labelFormatter={(t) => new Date(t).toLocaleString()}
@@ -604,12 +534,6 @@ function CalculusOverview({ articles, loading }) {
                       const lbl = ctx?.payload?.label || "";
                       return [v, lbl ? `Top: ${lbl}` : "Value"];
                     }}
-=======
-                  <YAxis />
-                  <Tooltip
-                    labelFormatter={(t) => new Date(t).toLocaleString()}
-                    formatter={(v) => [v, "Value"]}
->>>>>>> 8b8b0f5e13e2c8b69fd9ec47e0111191ccdfb2d7
                   />
                   <Line
                     type="monotone"
@@ -636,494 +560,6 @@ function CalculusOverview({ articles, loading }) {
     </div>
   );
 }
-// function CalculusOverview({ articles, loading }) {
-//   // 30分ビン
-//   const BIN_MIN = 30;
-//   var labeledSeries = buildSeriesWithLabels(articles);
-
-//   const series = React.useMemo(
-//     () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
-//     [articles]
-//   );
-
-//   // 最終点（.at(-1) 非使用）
-//    const hasSeries = series.length > 0;
-//   const exposure = hasSeries ? series[series.length - 1].exposure : 0;
-
-//   // 微分用の参照点を選ぶ
-//   const didx = pickDerivativeIndex(series);
-//   const dpoint = didx >= 0 ? series[didx] : undefined;
-
-//   const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
-//   const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
-
-//   // グラフ用データ
-//   const binHours = BIN_MIN / 60;
-//   const binCounts = series.map(s => s.V);                  // そのビンの記事数
-//   const rateSeries = series.map(s => (s.V / binHours));    // 記事/時
-//   const d = diff(rateSeries);                              // レート差分（近似加速度）
-
-//   // デバッグ
-//   console.log("[RSS] series:", series);
-//   console.log("[RSS] exposure:", exposure, "(min-weighted)");
-//   console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
-//   console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
-//   return (
-//     <div className="relative z-10 px-6 pb-4">
-//       <Card>
-//         <CardHeader className="pb-2">
-//           <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
-//         </CardHeader>
-//         <CardContent>
-//           <div className="grid md:grid-cols-4 gap-3">
-//             <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
-//             <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
-//             <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-//             <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
-//           </div>
-
-//           <div className="mt-3 grid lg:grid-cols-2 gap-3">
-//             {/* 左：記事数(ビン)の推移 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-//                 <AreaChart
-//                   data={binCounts.map((v, i) => ({ t: i, v }))}
-//                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-//                 >
-//                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-//                   <XAxis dataKey="t" hide /><YAxis hide />
-//                   <Tooltip />
-//                   <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
-//                 </AreaChart>
-//               </ResponsiveContainer>
-//             </div>
-
-//             {/* 右：記事レート(記事/時)の差分＝レート変化 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-
-// <LineChart data={labeledSeries}>
-//   <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-//   <XAxis dataKey="time" />
-//   <YAxis />
-//   <Tooltip />
-//   <Line
-//     type="monotone"
-//     dataKey="value"
-//     dot={false}
-//     stroke="#67e8f9"
-//     strokeWidth={2}
-//   >
-//     <LabelList
-//       dataKey="label"
-//       position="top"
-//       offset={12}
-//       className="fill-cyan-300"
-//       style={{ fontSize: 12, fontWeight: 600 }}
-//     />
-//   </Line>
-// </LineChart>
-//               </ResponsiveContainer>
-//             </div>
-//           </div>
-//         </CardContent>
-//       </Card>
-//     </div>
-//   );
-// }
-
-
-//           <div className="mt-3 grid lg:grid-cols-2 gap-3">
-//             {/* 左：記事数(ビン)の推移 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-//                 <AreaChart
-//                   data={binCounts.map((v, i) => ({ t: i, v }))}
-//                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-//                 >
-//                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-//                   <XAxis dataKey="t" hide /><YAxis hide />
-//                   <Tooltip />
-//                   <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
-//                 </AreaChart>
-//               </ResponsiveContainer>
-//             </div>
-
-//             {/* 右：記事レート(記事/時)の差分＝レート変化 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-    
-//     + <LineChart data={series}>
-//   <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-//   <XAxis
-//     dataKey="time"
-//     tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
-//   />
-//   <YAxis />
-//   <Tooltip
-//     labelFormatter={(t) => new Date(t).toLocaleString()}
-//     formatter={(v) => [v, "Value"]}
-//   />
-//   <Line
-//     type="monotone"
-//     dataKey="value"
-//     dot={false}
-//     stroke="#67e8f9"
-//     strokeWidth={2}
-//     isAnimationActive={false}
-//   >
-//     {/* ★ スパイク点にだけラベル（空文字は表示されない） */}
-//     <LabelList
-//       dataKey="label"
-//       position="top"
-//       offset={12}
-//       className="fill-cyan-300"
-//       style={{ fontSize: 12, fontWeight: 600 }}
-//     />
-//   </Line>
-// </LineChart>
-//               </ResponsiveContainer>
-//             </div>
-//           </div>
-//         </CardContent>
-//       </Card>
-//     </div>
-//   );
-// }
-
-function CalculusOverview({ articles, loading }) {
-  
-  const BIN_MIN = 30;
-
-  // 計算用シリーズ（記事数 V、露出 exposure、傾き slope、加速度 accel を含む）
-  const calcSeries = React.useMemo(
-    () => buildTimeSeries(articles || [], { binMs: BIN_MIN * 60_000 }),
-    [articles]
-  );
-
-  const has = calcSeries.length > 0;
-  const last = has ? calcSeries[calcSeries.length - 1] : undefined;
-  const exposure = Number.isFinite(last?.exposure) ? last.exposure : 0;
-
-  // 傾き/加速度の参照点（末尾近傍の有効点）
-  const didx = pickDerivativeIndex(calcSeries);
-  const dpoint = didx >= 0 ? calcSeries[didx] : undefined;
-  const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60   : 0;   // /min → /h
-  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 3600 : 0;   // /min² → /h²
-
-  // 左グラフ：ビンごとの記事数
-  const binCounts = calcSeries.map((s, i) => ({ t: i, v: s.V }));
-
-  // 右グラフ：キーワード注釈（タイトルから簡易抽出→スパイクにラベル）
-  const articlesWithKW = React.useMemo(() => {
-    return (articles || []).map(a => ({
-      ...a,
-      value: 1,
-      keywords: Array.isArray(a.keywords) && a.keywords.length
-        ? a.keywords
-        : String(a.title || "")
-            .split(/\W+/)
-            .filter(w => w.length >= 3)
-            .slice(0, 2),
-    }));
-  }, [articles]);
-
-  const labelSeries = React.useMemo(
-    () => buildSeriesWithLabels(articlesWithKW, { threshold: 3 }),
-    [articlesWithKW]
-  );
-
-  console.log("[HUD] calcSeries.len=", calcSeries.length, "labelSeries.len=", labelSeries.length);
-  console.log("[HUD] exposure=", exposure, "slope(/h)=", slopePerHour, "accel(/h^2)=", accelPerHour2);
-
-  return (
-    <div className="relative z-10 px-6 pb-4">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-4 gap-3">
-            <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
-            <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
-            <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-            <Metric label="記事数" value={loading ? "-" : String(articles?.length ?? 0)} />
-          </div>
-
-          <div className="mt-3 grid lg:grid-cols-2 gap-3">
-            {/* 左：記事数(ビン) */}
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={binCounts}
-                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-                  <XAxis dataKey="t" hide /><YAxis hide />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* 右：スパイクにキーワードラベル */}
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={labelSeries}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis
-                    dataKey="time"
-                    tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
-                  />
-                  <YAxis />
-                  <Tooltip
-                    labelFormatter={(t) => new Date(t).toLocaleString()}
-                    formatter={(v) => [v, "Value"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    dot={false}
-                    stroke="#67e8f9"
-                    strokeWidth={2}
-                    isAnimationActive={false}
-                  >
-                    <LabelList
-                      dataKey="label"
-                      position="top"
-                      offset={12}
-                      className="fill-cyan-300"
-                      style={{ fontSize: 12, fontWeight: 600 }}
-                    />
-                  </Line>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-// function CalculusOverview({ articles, loading }) {
-//   // 30分ビン
-//   const BIN_MIN = 30;
-//   // const series = React.useMemo(
-//   //   () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
-//   //   [articles]
-//   // );
-
-// const series = React.useMemo(() => {
-//   // items は {time, value, keywords[]} を含むようにしておく
-//   return buildSeriesWithLabels(articles || [], { threshold: 5 });
-// }, [articles]);
-
-//   // 最終点（.at(-1) 非使用）
-//    const hasSeries = series.length > 0;
-//   const exposure = hasSeries ? series[series.length - 1].exposure : 0;
-
-//   // 微分用の参照点を選ぶ
-//   const didx = pickDerivativeIndex(series);
-//   const dpoint = didx >= 0 ? series[didx] : undefined;
-
-//   const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
-//   const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
-
-//   // グラフ用データ
-//   const binHours = BIN_MIN / 60;
-//   const binCounts = series.map(s => s.V);                  // そのビンの記事数
-//   const rateSeries = series.map(s => (s.V / binHours));    // 記事/時
-//   const d = diff(rateSeries);                              // レート差分（近似加速度）
-
-//   // デバッグ
-//   console.log("[RSS] series:", series);
-//   console.log("[RSS] exposure:", exposure, "(min-weighted)");
-//   console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
-//   console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
-//   return (
-//     <div className="relative z-10 px-6 pb-4">
-//       <Card>
-//         <CardHeader className="pb-2">
-//           <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
-//         </CardHeader>
-//         <CardContent>
-//           <div className="grid md:grid-cols-4 gap-3">
-//             <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
-//             <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
-//             <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-//             <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
-//           </div>
-function CalculusOverview({ articles, loading }) {
-  const BIN_MIN = 30;
-
-  // 1) 計算用の等間隔シリーズ（記事数・∫Vdt・dV/dt 等）
-  const calcSeries = React.useMemo(
-    () => buildTimeSeries(articles || [], { binMs: BIN_MIN * 60_000 }),
-    [articles]
-  );
-
-  const has = calcSeries.length > 0;
-  const last = has ? calcSeries[calcSeries.length - 1] : undefined;
-  const exposure = Number.isFinite(last?.exposure) ? last.exposure : 0;
-
-  // 微分指標
-  const didx = pickDerivativeIndex(calcSeries);
-  const dpoint = didx >= 0 ? calcSeries[didx] : undefined;
-  const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
-  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 3600     : 0;  // /min² → /h²
-
-  // 左グラフのデータ（件数をそのまま描画）
-  const binCounts = calcSeries.map((s, i) => ({ t: i, v: s.V }));
-
-  // 2) 注釈用：簡易キーワード抽出 → 時間バケット
-  const articlesWithKW = React.useMemo(() => {
-    return (articles || []).map(a => ({
-      ...a,
-      value: 1,
-      keywords: Array.isArray(a.keywords) && a.keywords.length
-        ? a.keywords
-        : String(a.title || "")
-            .split(/\W+/)
-            .filter(w => w.length >= 3)
-            .slice(0, 2),
-    }));
-  }, [articles]);
-
-  const labelSeries = React.useMemo(
-    () => buildSeriesWithLabels(articlesWithKW, { threshold: 3 }),
-    [articlesWithKW]
-  );
-
-  // デバッグ
-  console.log("[HUD] calcSeries.len=", calcSeries.length, "labelSeries.len=", labelSeries.length);
-  console.log("[HUD] exposure=", exposure, "slope(/h)=", slopePerHour, "accel(/h^2)=", accelPerHour2);
-
-  return (
-    <div className="relative z-10 px-6 pb-4">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-4 gap-3">
-            <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
-            <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
-            <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-            <Metric label="記事数" value={loading ? "-" : String(articles?.length ?? 0)} />
-          </div>
-
-          <div className="mt-3 grid lg:grid-cols-2 gap-3">
-            {/* 左：記事数(ビン)の推移（calcSeries） */}
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={binCounts}
-                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-                  <XAxis dataKey="t" hide /><YAxis hide />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* 右：スパイク点にキーワードラベル（labelSeries） */}
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={labelSeries}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis
-                    dataKey="time"
-                    tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
-                  />
-                  <YAxis />
-                  <Tooltip
-                    labelFormatter={(t) => new Date(t).toLocaleString()}
-                    formatter={(v) => [v, "Value"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    dot={false}
-                    stroke="#67e8f9"
-                    strokeWidth={2}
-                    isAnimationActive={false}
-                  >
-                    <LabelList
-                      dataKey="label"
-                      position="top"
-                      offset={12}
-                      className="fill-cyan-300"
-                      style={{ fontSize: 12, fontWeight: 600 }}
-                    />
-                  </Line>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-//           <div className="mt-3 grid lg:grid-cols-2 gap-3">
-//             {/* 左：記事数(ビン)の推移 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-//                 <AreaChart
-//                   data={binCounts.map((v, i) => ({ t: i, v }))}
-//                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-//                 >
-//                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-//                   <XAxis dataKey="t" hide /><YAxis hide />
-//                   <Tooltip />
-//                   <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
-//                 </AreaChart>
-//               </ResponsiveContainer>
-//             </div>
-
-//             {/* 右：記事レート(記事/時)の差分＝レート変化 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-    
-//     + <LineChart data={series}>
-//   <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-//   <XAxis
-//     dataKey="time"
-//     tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
-//   />
-//   <YAxis />
-//   <Tooltip
-//     labelFormatter={(t) => new Date(t).toLocaleString()}
-//     formatter={(v) => [v, "Value"]}
-//   />
-//   <Line
-//     type="monotone"
-//     dataKey="value"
-//     dot={false}
-//     stroke="#67e8f9"
-//     strokeWidth={2}
-//     isAnimationActive={false}
-//   >
-//     {/* ★ スパイク点にだけラベル（空文字は表示されない） */}
-//     <LabelList
-//       dataKey="label"
-//       position="top"
-//       offset={12}
-//       className="fill-cyan-300"
-//       style={{ fontSize: 12, fontWeight: 600 }}
-//     />
-//   </Line>
-// </LineChart>
-//               </ResponsiveContainer>
-//             </div>
-//           </div>
-//         </CardContent>
-//       </Card>
-//     </div>
-//   );
-// }
 
 // ─── ADD: helpers (place ABOVE CalculusOverview) ──────────────────────────────
 /** Parse to ms */
@@ -1199,77 +635,6 @@ series[i] = {
 
   return series;
 }
-
-// ─── OPTIONAL: simple Error Boundary ──────────────────────────────────────────
-// class ErrorBoundary extends React.Component {
-//   constructor(props) {
-//     super(props);
-//     this.state = { hasError: false, msg: "" };
-//   }
-//   static getDerivedStateFromError(err) {
-//     return { hasError: true, msg: err?.message || String(err) };
-//   }
-//   componentDidCatch(err, info) {
-//     console.error("UI ErrorBoundary:", err, info);
-//   }
-
-
-// }
-
-// function bucketHour(ts) {
-//   // 時間粒度を任意で変更可（今は「時」単位）
-//   const d = new Date(ts);
-//   d.setMinutes(0, 0, 0);
-//   return d.toISOString();
-// }
-
-// function buildSeriesWithLabels(items, { threshold = 3 } = {}) {
-//   // 1) 時間バケットに集計（値とキーワード頻度）
-//   const buckets = new Map();
-//   for (const it of items) {
-//     const key = bucketHour(it.time);
-//     const b = buckets.get(key) || { time: key, value: 0, kwCounts: {} };
-//     b.value += Number(it.value ?? 0);
-//     for (const kw of it.keywords ?? []) {
-//       if (!kw) continue;
-//       b.kwCounts[kw] = (b.kwCounts[kw] || 0) + 1;
-//     }
-//     buckets.set(key, b);
-//   }
-
-//   const series = Array.from(buckets.values()).sort(
-//     (a, b) => new Date(a.time) - new Date(b.time)
-//   );
-
-//   // 2) スパイク検出（簡易：局所最大 かつ 閾値以上）
-//   return series.map((p, i, arr) => {
-//     const prev = arr[i - 1]?.value ?? p.value;
-//     const next = arr[i + 1]?.value ?? p.value;
-//     const isSpike = p.value >= threshold && p.value >= prev && p.value >= next;
-
-//     // 3) バケット内で最多のキーワードをラベルに
-//     const topKeyword =
-//       Object.entries(p.kwCounts)
-//         .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-
-//     return {
-//       time: p.time,
-//       value: p.value,
-//       label: isSpike ? topKeyword : "", // ← ここがLabelListに渡る
-//     };
-//   });
-// }
-//   render() {
-//     if (this.state.hasError) {
-//       return (
-//         <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-red-200">
-//           <div className="font-semibold">計算モジュールでエラーが発生しました</div>
-//           <div className="text-xs opacity-80">{this.state.msg}</div>
-//         </div>
-//       );
-//     }
-//     return this.props.children;
-//   }
 
 
 class ErrorBoundary extends React.Component {
