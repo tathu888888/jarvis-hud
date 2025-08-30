@@ -119,7 +119,7 @@ export default function NewsHUD() {
       }
       const list = [...dedupMap.values()]
         .sort((a, b) => (b._ts || 0) - (a._ts || 0))
-        .slice(0, 30);
+        .slice(0, 100);
 
       setArticles(list);
     } finally {
@@ -369,14 +369,53 @@ async function annotateTitle(title, { source, time, summary } = {}) {
   return note;
 }
 
-function CalculusOverview({ articles, loading }) {
-  const series = useSimSeries(101, 120);
-  const d = diff(series);
-  const d2 = diff(d);
-  const exposure = integrate(series);
-  const slope = d[d.length - 1] ?? 0;
-  const accel = d2[d2.length - 1] ?? 0;
+function pickDerivativeIndex(series) {
+  const n = series.length;
+  if (n === 0) return -1;
+  if (n === 1) return 0;
+  if (n === 2) return 1;
 
+  // まずは中央差分が可能な領域 [1 .. n-2] で、末尾側から有効な点を探す
+  for (let i = n - 2; i >= 1; i--) {
+    const left = series[i - 1], cur = series[i], right = series[i + 1];
+    // 近傍のいずれかに変化があれば「有効」とみなす
+    if ((left?.V ?? 0) !== (cur?.V ?? 0) || (right?.V ?? 0) !== (cur?.V ?? 0)) {
+      return i;
+    }
+  }
+  // すべてフラットなら末尾-1（中央差分が取れる端）にフォールバック
+  return n - 2;
+}
+function CalculusOverview({ articles, loading }) {
+  // 30分ビン
+  const BIN_MIN = 30;
+  const series = React.useMemo(
+    () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
+    [articles]
+  );
+
+  // 最終点（.at(-1) 非使用）
+   const hasSeries = series.length > 0;
+  const exposure = hasSeries ? series[series.length - 1].exposure : 0;
+
+  // 微分用の参照点を選ぶ
+  const didx = pickDerivativeIndex(series);
+  const dpoint = didx >= 0 ? series[didx] : undefined;
+
+  const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
+  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
+
+  // グラフ用データ
+  const binHours = BIN_MIN / 60;
+  const binCounts = series.map(s => s.V);                  // そのビンの記事数
+  const rateSeries = series.map(s => (s.V / binHours));    // 記事/時
+  const d = diff(rateSeries);                              // レート差分（近似加速度）
+
+  // デバッグ
+  console.log("[RSS] series:", series);
+  console.log("[RSS] exposure:", exposure, "(min-weighted)");
+  console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
+  console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
   return (
     <div className="relative z-10 px-6 pb-4">
       <Card>
@@ -385,25 +424,35 @@ function CalculusOverview({ articles, loading }) {
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-4 gap-3">
-            <Metric label="総露出 ∫V dt" value={Math.round(exposure)} />
-            <Metric label="傾き dV/dt" value={slope.toFixed(2)} unit="/min" color={sparkColor(slope)} />
-            <Metric label="加速度 d²V/dt²" value={accel.toFixed(2)} unit="/min²" color={sparkColor(accel)} />
+            <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
+            <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
+            <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
             <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
           </div>
+
           <div className="mt-3 grid lg:grid-cols-2 gap-3">
+            {/* 左：記事数(ビン)の推移 */}
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={series.map((v, i) => ({ t: i, v }))} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <AreaChart
+                  data={binCounts.map((v, i) => ({ t: i, v }))}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-                  <XAxis dataKey="t" hide /><YAxis hide domain={[0, 120]} />
+                  <XAxis dataKey="t" hide /><YAxis hide />
                   <Tooltip />
                   <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+
+            {/* 右：記事レート(記事/時)の差分＝レート変化 */}
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={d.map((v, i) => ({ t: i, v }))} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <LineChart
+                  data={d.map((v, i) => ({ t: i, v }))}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
                   <XAxis dataKey="t" hide /><YAxis hide />
                   <Tooltip />
@@ -416,4 +465,105 @@ function CalculusOverview({ articles, loading }) {
       </Card>
     </div>
   );
+}
+
+// ─── ADD: helpers (place ABOVE CalculusOverview) ──────────────────────────────
+/** Parse to ms */
+const toMs = (t) => (typeof t === "string" ? Date.parse(t) : +t);
+
+/** Round a date to minute for binning */
+const floorToMinute = (d) => {
+  const x = new Date(d);
+  x.setSeconds(0, 0);
+  return x.getTime();
+};
+
+/**
+ * Build a regular time series from RSS items and compute:
+ *  V: value per bin (article count)
+ *  ∫V dt: exposure (trapezoid cumulative integral, minutes as time unit)
+ *  dV/dt: slope (per min, central difference)
+ *  d²V/dt²: accel (per min²)
+ */
+function buildTimeSeries(items, { binMs = 60_000 } = {}) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  // 1) bin counts per minute
+  const bins = new Map();
+  for (const it of items) {
+    if (!it || !it.time) continue;
+    const t = floorToMinute(toMs(it.time));
+    bins.set(t, (bins.get(t) || 0) + 1);
+  }
+
+  // 2) create dense timeline from min..max (no gaps)
+  const times = [...bins.keys()].sort((a, b) => a - b);
+  const t0 = times[0];
+  const tN = times[times.length - 1];
+  const series = [];
+  for (let t = t0; t <= tN; t += binMs) {
+    const V = bins.get(t) || 0;
+    series.push({ t, V });
+  }
+
+  // 3) integral (trapezoid), slope, accel
+  let exposure = 0;
+  for (let i = 0; i < series.length; i++) {
+    const prev = series[i - 1];
+    const cur = series[i];
+    if (i > 0) {
+      const dtMin = (cur.t - prev.t) / 60_000; // minutes
+      exposure += ((prev.V + cur.V) / 2) * dtMin;
+    }
+    // slope (central diff where possible; fallback to forward/backward)
+    const left = series[i - 1];
+    const right = series[i + 1];
+    let dVdt = 0;
+    if (left && right) dVdt = (right.V - left.V) / (2 * (binMs / 60_000));
+    else if (right) dVdt = (right.V - cur.V) / (binMs / 60_000);
+    else if (left) dVdt = (cur.V - left.V) / (binMs / 60_000);
+
+    // accel (second diff)
+    let d2Vdt2 = 0;
+    if (left && right) {
+      d2Vdt2 =
+        (right.V - 2 * cur.V + left.V) /
+        Math.pow(binMs / 60_000, 2); // per min^2
+    }
+
+    series[i] = {
+      ...cur,
+      exposure, // ∫V dt
+      slope: dVdt, // dV/dt
+      accel: d2Vdt2, // d²V/dt²
+      date: new Date(cur.t).toISOString(),
+    };
+  }
+
+  return series;
+}
+
+// ─── OPTIONAL: simple Error Boundary ──────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, msg: "" };
+  }
+  static getDerivedStateFromError(err) {
+    return { hasError: true, msg: err?.message || String(err) };
+  }
+  componentDidCatch(err, info) {
+    console.error("UI ErrorBoundary:", err, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-red-200">
+          <div className="font-semibold">計算モジュールでエラーが発生しました</div>
+          <div className="text-xs opacity-80">{this.state.msg}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
