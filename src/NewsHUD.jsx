@@ -1,614 +1,14 @@
-// import React, { useEffect, useState } from "react";
-// import { motion } from "framer-motion";
-// import { Globe, Newspaper, RefreshCcw } from "lucide-react";
-// import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-
-// /* -------------------- Minimal UI (inline) -------------------- */
-// function cn(...xs){ return xs.filter(Boolean).join(" "); }
-
-// function Card({ children, className }) {
-//   return <div className={cn("rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 backdrop-blur-xl", className)}>{children}</div>;
-// }
-// function CardHeader({ children, className }) {
-//   return <div className={cn("mb-2 flex items-center justify-between", className)}>{children}</div>;
-// }
-// function CardTitle({ children, className }) {
-//   return <h2 className={cn("text-cyan-100/90 text-sm tracking-wider", className)}>{children}</h2>;
-// }
-// function CardContent({ children, className }) {
-//   return <div className={cn("", className)}>{children}</div>;
-// }
-// function Badge({ children, variant="outline", className }) {
-//   const base = "px-2 py-0.5 text-[10px] rounded border";
-//   const styles = variant === "outline"
-//     ? "border-cyan-500/40 text-cyan-200"
-//     : "bg-cyan-500/20 border-cyan-400/40 text-cyan-100";
-//   return <span className={cn(base, styles, className)}>{children}</span>;
-// }
-// /* ------------------------------------------------------------- */
-
-// /* ===== RSS 設定 & ユーティリティ ===== */
-// const FEEDS = [
-//   { source: "BBC World", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
-//   { source: "Reuters World", url: "http://feeds.reuters.com/Reuters/worldNews" },
-//   { source: "NHK 国際", url: "https://www3.nhk.or.jp/rss/news/cat5.xml" },
-//   // 追加したい場合:
-//   // { source: "CNN Top", url: "http://rss.cnn.com/rss/edition.rss" },
-//   // { source: "The Verge", url: "https://www.theverge.com/rss/index.xml" },
-// ];
-
-// // CORS を回避してブラウザから直接取得する軽量プロキシ（AllOrigins）
-// async function fetchRSSviaProxy(url) {
-//   const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-//   if (!res.ok) throw new Error(`Fetch failed: ${url}`);
-//   const data = await res.json(); // { contents: "<xml...>" }
-//   return data.contents;
-// }
-
-// function parseRSS(xmlText, fallbackSource) {
-//   const parser = new DOMParser();
-//   const xml = parser.parseFromString(xmlText, "application/xml");
-//   const items = [...xml.querySelectorAll("item")];
-
-//   const toDate = (s) => {
-//     if (!s) return null;
-//     const d = new Date(s);
-//     return isNaN(d.getTime()) ? null : d;
-//   };
-//   const strip = (html) => {
-//     const tmp = document.createElement("div");
-//     tmp.innerHTML = html || "";
-//     return (tmp.textContent || tmp.innerText || "").trim();
-//   };
-
-//   return items.map((item) => {
-//     const title = item.querySelector("title")?.textContent?.trim() || "";
-//     const link =
-//       item.querySelector("link")?.textContent?.trim() ||
-//       item.querySelector("guid")?.textContent?.trim() ||
-//       "";
-//     const pubDateRaw = item.querySelector("pubDate")?.textContent?.trim() || "";
-//     const pubDate = toDate(pubDateRaw);
-//     const desc = item.querySelector("description")?.textContent || "";
-
-//     // media:thumbnail / media:content の画像も試す（名前空間コロンはエスケープが必要）
-//     const media =
-//       item.querySelector("media\\:thumbnail")?.getAttribute("url") ||
-//       item.querySelector("media\\:content")?.getAttribute("url") ||
-//       "";
-
-//     return {
-//       title,
-//       url: link,
-//       source: fallbackSource,
-//       time: pubDate ? pubDate.toISOString() : "",
-//       summary: strip(desc),
-//       image: media || "",
-//       _ts: pubDate ? pubDate.getTime() : 0,
-//       _key: (title + "|" + link).toLowerCase(),
-//     };
-//   });
-// }
-
-// /* ===== メイン ===== */
-// export default function NewsHUD() {
-//   // const [articles, setArticles] = useState([]);
-// const [allArticles, setAllArticles] = useState([]);
-// const [articleLimit, setArticleLimit] = useState(() => {
-//   // 任意: 前回値を復元
-//   const v = Number(localStorage.getItem("articleLimit") || 100);
-//   return Number.isFinite(v) ? v : 100;
-// });
-
-//   const [loading, setLoading] = useState(true);
-
-//   const loadAll = async () => {
-//     setLoading(true);
-//     try {
-//       // 複数RSSを並列取得 → パース
-//       const xmls = await Promise.all(
-//         FEEDS.map(async (f) => {
-//           try {
-//             const xmlText = await fetchRSSviaProxy(f.url);
-//             return parseRSS(xmlText, f.source);
-//           } catch (e) {
-//             console.warn("RSS fetch failed:", f.source, e);
-//             return [];
-//           }
-//         })
-//       );
-
-//       // 平坦化 → 重複除去（title+link） → pubDate降順 → 上位N件
-//       const merged = xmls.flat();
-//       const dedupMap = new Map();
-//       for (const it of merged) {
-//         if (!dedupMap.has(it._key)) dedupMap.set(it._key, it);
-//       }
-//       // const list = [...dedupMap.values()]
-//       //   .sort((a, b) => (b._ts || 0) - (a._ts || 0))
-//       //   .slice(0, 100);
-
-// const list = [...dedupMap.values()]
-//   .sort((a, b) => (b._ts || 0) - (a._ts || 0));
-// // .slice(0, 100) ← 削除
-
-// setAllArticles(list);   // 変更
-// // setArticles(list);   // 削除
-        
-//       // setArticles(list);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => { loadAll(); }, []);
-
-//   return (
-//     <div className="relative min-h-screen w-full bg-black text-cyan-100 overflow-hidden">
-//       <HUDGrid />
-
-//       {/* Header */}
-//       <div className="relative z-10 flex items-center justify-between px-6 py-4">
-//         <div className="flex items-center gap-3">
-//           <Newspaper className="h-5 w-5 text-cyan-300" />
-//           <span className="tracking-widest text-cyan-200/90">J.A.R.V.I.S. // NEWS FEED</span>
-//           <Badge variant="outline">{loading ? "LOADING" : "LIVE"}</Badge>
-//         </div>
-
-//          <div className="flex items-center gap-3">
-//     <label className="text-xs text-cyan-200/80">
-//       表示件数
-//     </label>
-//     <input
-//       type="number"
-//       min={1}
-//       max={500}
-//       value={articleLimit}
-//       onChange={(e) => {
-//         const v = Number(e.target.value);
-//         setArticleLimit(Number.isFinite(v) ? v : 100);
-//       }}
-//       className="w-20 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 text-sm text-cyan-100 outline-none focus:border-cyan-300"
-//       title="1〜500 の範囲で指定"
-//     />
-//     <div className="flex items-center gap-6 text-cyan-200/80">
-//       <div className="flex items-center gap-2"><Globe className="h-4 w-4" /><span>WORLDWIDE</span></div>
-//       <RefreshCcw
-//         className="h-4 w-4 cursor-pointer hover:text-cyan-100"
-//         onClick={loadAll}
-//         title="Refresh"
-//       />
-//     </div>
-//   </div>
-// </div>
-//       {/* Calculus / DS block */}
-//       <CalculusOverview articles={articles} loading={loading} />
-
-    
-//       {/* News List */}
-
-// <div className="relative z-10 grid lg:grid-cols-2 gap-6 px-6 pb-8">
-//   {loading ? (
-//     <div className="text-center col-span-2 text-cyan-400">Loading news...</div>
-//   ) : (
-//     articles.map((a, i) => (
-//       <motion.div
-//         key={a._key ?? `${a.source ?? "src"}-${i}`}
-//         initial={{ opacity: 0, y: 20 }}
-//         animate={{ opacity: 1, y: 0 }}
-//         transition={{ delay: Math.min(i * 0.04, 0.6) }}
-//       >
-//         <GlassCard title={a.title}>
-//           {a.image ? (
-//             <img
-//               src={a.image}
-//               alt=""
-//               className="mb-2 rounded-lg max-h-40 w-full object-cover opacity-90"
-//             />
-//           ) : null}
-
-//           <div className="text-sm text-cyan-200/90 mb-2 line-clamp-3">
-//             {a.summary}
-//           </div>
-
-//           {/* AI解説（あれば表示） */}
-//           {a.aiLoading ? (
-//             <div className="text-xs text-cyan-300/80 mb-2">AI解説を生成中…</div>
-//           ) : a.ai ? (
-//             <div className="text-xs text-cyan-200/80 mb-2">{a.ai}</div>
-//           ) : null}
-
-//           <div className="flex justify-between items-center text-xs text-cyan-400/70">
-//             <span>{a.source}</span>
-//             <div className="flex items-center gap-3">
-//               <button
-//                 type="button"
-//                 className="underline hover:text-cyan-200"
-//                 title="OpenAIにタイトルを投げて要約を追記"
-//                 onClick={async () => {
-//                   setArticles(prev =>
-//                     prev.map(x =>
-//                       (x._key ?? `${x.source ?? "src"}-${i}`) === (a._key ?? `${a.source ?? "src"}-${i}`)
-//                         ? { ...x, aiLoading: true }
-//                         : x
-//                     )
-//                   );
-//                   try {
-//                     const note = await annotateTitle(a.title, { source: a.source, time: a.time, summary: a.summary });
-//                     setArticles(prev =>
-//                       prev.map(x =>
-//                         (x._key ?? `${x.source ?? "src"}-${i}`) === (a._key ?? `${a.source ?? "src"}-${i}`)
-//                           ? { ...x, ai: note, aiLoading: false }
-//                           : x
-//                       )
-//                     );
-//                   } catch (e) {
-//                     setArticles(prev =>
-//                       prev.map(x =>
-//                         (x._key ?? `${x.source ?? "src"}-${i}`) === (a._key ?? `${a.source ?? "src"}-${i}`)
-//                           ? { ...x, ai: "AI解説の取得に失敗しました。", aiLoading: false }
-//                           : x
-//                       )
-//                     );
-//                   }
-//                 }}
-//               >
-//                 AI解説
-//               </button>
-
-//               {a.url ? (
-//                 <a
-//                   className="underline hover:text-cyan-200"
-//                   href={a.url}
-//                   target="_blank"
-//                   rel="noopener noreferrer"
-//                 >
-//                   Open
-//                 </a>
-//               ) : (
-//                 <span>{a.time}</span>
-//               )}
-//             </div>
-//           </div>
-//         </GlassCard>
-//       </motion.div>
-//     ))
-//   )}
-// </div>
-// </div>
-
-// );
-// }
-
-
-
-// function HUDGrid() {
-//   return (
-//     <div className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]">
-//       <div className="absolute inset-0 opacity-20">
-//         <div
-//           className="absolute inset-0"
-//           style={{
-//             backgroundImage:
-//               "linear-gradient(to right, rgba(56,189,248,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(56,189,248,0.08) 1px, transparent 1px)",
-//             backgroundSize: "40px 40px, 40px 40px",
-//           }}
-//         />
-//       </div>
-//     </div>
-//   );
-// }
-
-// function GlassCard({ title, children }) {
-//   return (
-//     <Card className="shadow-[0_0_40px_rgba(34,211,238,0.08)]">
-//       <CardHeader className="pb-2">
-//         <CardTitle>{title}</CardTitle>
-//       </CardHeader>
-//       <CardContent>{children}</CardContent>
-//     </Card>
-//   );
-// }
-
-// /* ================== Calculus & DS Extensions ================== */
-// function diff(series) {
-//   const d = [];
-//   for (let i = 1; i < series.length; i++) d.push(series[i] - series[i - 1]);
-//   return d;
-// }
-// function integrate(series) {
-//   let area = 0;
-//   for (let i = 1; i < series.length; i++) area += (series[i] + series[i - 1]) / 2;
-//   return area;
-// }
-// function movingAvg(series, k = 5) {
-//   const out = [];
-//   for (let i = 0; i < series.length; i++) {
-//     const s = Math.max(0, i - k + 1);
-//     const slice = series.slice(s, i + 1);
-//     out.push(slice.reduce((a, b) => a + b, 0) / slice.length);
-//   }
-//   return out;
-// }
-// function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-
-// function useSimSeries(seed = 0, len = 120) {
-//   const [series, setSeries] = React.useState(
-//     Array.from({ length: len }, (_, i) =>
-//       50 + 10 * Math.sin((i + seed) / 5) + 8 * Math.cos((i + seed) / 9) + 6 * Math.random()
-//     )
-//   );
-//   React.useEffect(() => {
-//     const id = setInterval(() => {
-//       setSeries((prev) => {
-//         const i = prev.length;
-//         const next = 50 + 10 * Math.sin((i + seed) / 5) + 8 * Math.cos((i + seed) / 9) + 6 * Math.random();
-//         const arr = [...prev.slice(1), clamp(next, 0, 120)];
-//         return arr;
-//       });
-//     }, 1200);
-//     return () => clearInterval(id);
-//   }, [seed]);
-//   return series;
-// }
-
-// function sparkColor(slope) { return slope > 0 ? "#22d3ee" : "#f472b6"; }
-
-// function Metric({ label, value, unit, color }) {
-//   return (
-//     <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-2">
-//       <div className="opacity-70 text-[10px]">{label}</div>
-//       <div className="text-cyan-100 font-mono">
-//         <span style={{ color: color || undefined }}>{value}</span>
-//         {unit ? <span className="opacity-70 ml-1">{unit}</span> : null}
-//       </div>
-//     </div>
-//   );
-// }
-
-// // async function annotateTitle(title) {
-// //   const res = await fetch("/api/annotate", {
-// //     method: "POST",
-// //     headers: { "Content-Type": "application/json" },
-// //     body: JSON.stringify({ title }),
-// //   });
-// //   if (!res.ok) throw new Error("annotate failed");
-// //   const data = await res.json(); // { note: "..." }
-// //   return data.note;
-// // }
-
-// const aiCache = new Map(); // title をキーにキャッシュ
-// async function annotateTitle(title, { source, time, summary } = {}) {
-//   // 既に取得済みならキャッシュを返す
-//   if (aiCache.has(title)) return aiCache.get(title);
-
-//   const res = await fetch("/api/annotate", {
-//     method: "POST",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify({
-//       title,
-//       // あると精度が上がるのでメタも渡す（サーバ側は title だけでもOK）
-//       meta: { source, time, summary }
-//     }),
-//   });
-
-//   if (!res.ok) {
-//     throw new Error(`annotate failed: ${res.status}`);
-//   }
-//   const { note } = await res.json(); // { note: "..." }
-//   aiCache.set(title, note);
-//   return note;
-// }
-
-// function pickDerivativeIndex(series) {
-//   const n = series.length;
-//   if (n === 0) return -1;
-//   if (n === 1) return 0;
-//   if (n === 2) return 1;
-
-//   // まずは中央差分が可能な領域 [1 .. n-2] で、末尾側から有効な点を探す
-//   for (let i = n - 2; i >= 1; i--) {
-//     const left = series[i - 1], cur = series[i], right = series[i + 1];
-//     // 近傍のいずれかに変化があれば「有効」とみなす
-//     if ((left?.V ?? 0) !== (cur?.V ?? 0) || (right?.V ?? 0) !== (cur?.V ?? 0)) {
-//       return i;
-//     }
-//   }
-//   // すべてフラットなら末尾-1（中央差分が取れる端）にフォールバック
-//   return n - 2;
-// }
-// function CalculusOverview({ articles, loading }) {
-//   // 30分ビン
-//   const BIN_MIN = 30;
-//   const series = React.useMemo(
-//     () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
-//     [articles]
-//   );
-
-//   // 最終点（.at(-1) 非使用）
-//    const hasSeries = series.length > 0;
-//   const exposure = hasSeries ? series[series.length - 1].exposure : 0;
-
-//   // 微分用の参照点を選ぶ
-//   const didx = pickDerivativeIndex(series);
-//   const dpoint = didx >= 0 ? series[didx] : undefined;
-
-//   const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
-//   const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
-
-//   // グラフ用データ
-//   const binHours = BIN_MIN / 60;
-//   const binCounts = series.map(s => s.V);                  // そのビンの記事数
-//   const rateSeries = series.map(s => (s.V / binHours));    // 記事/時
-//   const d = diff(rateSeries);                              // レート差分（近似加速度）
-
-//   // デバッグ
-//   console.log("[RSS] series:", series);
-//   console.log("[RSS] exposure:", exposure, "(min-weighted)");
-//   console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
-//   console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
-//   return (
-//     <div className="relative z-10 px-6 pb-4">
-//       <Card>
-//         <CardHeader className="pb-2">
-//           <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
-//         </CardHeader>
-//         <CardContent>
-//           <div className="grid md:grid-cols-4 gap-3">
-//             <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
-//             <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
-//             <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-//             <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
-//           </div>
-
-//           <div className="mt-3 grid lg:grid-cols-2 gap-3">
-//             {/* 左：記事数(ビン)の推移 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-//                 <AreaChart
-//                   data={binCounts.map((v, i) => ({ t: i, v }))}
-//                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-//                 >
-//                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-//                   <XAxis dataKey="t" hide /><YAxis hide />
-//                   <Tooltip />
-//                   <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
-//                 </AreaChart>
-//               </ResponsiveContainer>
-//             </div>
-
-//             {/* 右：記事レート(記事/時)の差分＝レート変化 */}
-//             <div className="h-28">
-//               <ResponsiveContainer width="100%" height="100%">
-//                 <LineChart
-//                   data={d.map((v, i) => ({ t: i, v }))}
-//                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-//                 >
-//                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-//                   <XAxis dataKey="t" hide /><YAxis hide />
-//                   <Tooltip />
-//                   <Line type="monotone" dataKey="v" dot={false} stroke="#67e8f9" strokeWidth={2} />
-//                 </LineChart>
-//               </ResponsiveContainer>
-//             </div>
-//           </div>
-//         </CardContent>
-//       </Card>
-//     </div>
-//   );
-// }
-
-// // ─── ADD: helpers (place ABOVE CalculusOverview) ──────────────────────────────
-// /** Parse to ms */
-// const toMs = (t) => (typeof t === "string" ? Date.parse(t) : +t);
-
-// /** Round a date to minute for binning */
-// const floorToMinute = (d) => {
-//   const x = new Date(d);
-//   x.setSeconds(0, 0);
-//   return x.getTime();
-// };
-
-// /**
-//  * Build a regular time series from RSS items and compute:
-//  *  V: value per bin (article count)
-//  *  ∫V dt: exposure (trapezoid cumulative integral, minutes as time unit)
-//  *  dV/dt: slope (per min, central difference)
-//  *  d²V/dt²: accel (per min²)
-//  */
-// function buildTimeSeries(items, { binMs = 60_000 } = {}) {
-//   if (!Array.isArray(items) || items.length === 0) return [];
-
-//   // 1) bin counts per minute
-//   const bins = new Map();
-//   for (const it of items) {
-//     if (!it || !it.time) continue;
-//     const t = floorToMinute(toMs(it.time));
-//     bins.set(t, (bins.get(t) || 0) + 1);
-//   }
-
-//   // 2) create dense timeline from min..max (no gaps)
-//   const times = [...bins.keys()].sort((a, b) => a - b);
-//   const t0 = times[0];
-//   const tN = times[times.length - 1];
-//   const series = [];
-//   for (let t = t0; t <= tN; t += binMs) {
-//     const V = bins.get(t) || 0;
-//     series.push({ t, V });
-//   }
-
-//   // 3) integral (trapezoid), slope, accel
-//   let exposure = 0;
-//   for (let i = 0; i < series.length; i++) {
-//     const prev = series[i - 1];
-//     const cur = series[i];
-//     if (i > 0) {
-//       const dtMin = (cur.t - prev.t) / 60_000; // minutes
-//       exposure += ((prev.V + cur.V) / 2) * dtMin;
-//     }
-//     // slope (central diff where possible; fallback to forward/backward)
-//     const left = series[i - 1];
-//     const right = series[i + 1];
-//     let dVdt = 0;
-//     if (left && right) dVdt = (right.V - left.V) / (2 * (binMs / 60_000));
-//     else if (right) dVdt = (right.V - cur.V) / (binMs / 60_000);
-//     else if (left) dVdt = (cur.V - left.V) / (binMs / 60_000);
-
-//     // accel (second diff)
-//     let d2Vdt2 = 0;
-//     if (left && right) {
-//       d2Vdt2 =
-//         (right.V - 2 * cur.V + left.V) /
-//         Math.pow(binMs / 60_000, 2); // per min^2
-//     }
-
-//     const articles = React.useMemo(() => {
-//   return allArticles.slice(0, clamp(articleLimit, 1, 500));
-// }, [allArticles, articleLimit]);
-
-//     series[i] = {
-//       ...cur,
-//       exposure, // ∫V dt
-//       slope: dVdt, // dV/dt
-//       accel: d2Vdt2, // d²V/dt²
-//       date: new Date(cur.t).toISOString(),
-//     };
-//   }
-
-//   return series;
-// }
-
-// // ─── OPTIONAL: simple Error Boundary ──────────────────────────────────────────
-// class ErrorBoundary extends React.Component {
-//   constructor(props) {
-//     super(props);
-//     this.state = { hasError: false, msg: "" };
-//   }
-//   static getDerivedStateFromError(err) {
-//     return { hasError: true, msg: err?.message || String(err) };
-//   }
-//   componentDidCatch(err, info) {
-//     console.error("UI ErrorBoundary:", err, info);
-//   }
-//   render() {
-//     if (this.state.hasError) {
-//       return (
-//         <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-red-200">
-//           <div className="font-semibold">計算モジュールでエラーが発生しました</div>
-//           <div className="text-xs opacity-80">{this.state.msg}</div>
-//         </div>
-//       );
-//     }
-//     return this.props.children;
-//   }
-// }
 
 
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Globe, Newspaper, RefreshCcw } from "lucide-react";
-import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+// import { ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, LabelList } from "recharts";
 
+import {
+  ResponsiveContainer, AreaChart, Area,
+  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, LabelList
+} from "recharts";
 /* -------------------- Minimal UI (inline) -------------------- */
 function cn(...xs){ return xs.filter(Boolean).join(" "); }
 
@@ -1025,36 +425,53 @@ function pickDerivativeIndex(series) {
   // すべてフラットなら末尾-1（中央差分が取れる端）にフォールバック
   return n - 2;
 }
+
+
 function CalculusOverview({ articles, loading }) {
-  // 30分ビン
   const BIN_MIN = 30;
-  const series = React.useMemo(
-    () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
+
+  // 1) 計算用の等間隔シリーズ（記事数・∫Vdt・dV/dt 等）
+  const calcSeries = React.useMemo(
+    () => buildTimeSeries(articles || [], { binMs: BIN_MIN * 60_000 }),
     [articles]
   );
 
-  // 最終点（.at(-1) 非使用）
-   const hasSeries = series.length > 0;
-  const exposure = hasSeries ? series[series.length - 1].exposure : 0;
+  const has = calcSeries.length > 0;
+  const last = has ? calcSeries[calcSeries.length - 1] : undefined;
+  const exposure = Number.isFinite(last?.exposure) ? last.exposure : 0;
 
-  // 微分用の参照点を選ぶ
-  const didx = pickDerivativeIndex(series);
-  const dpoint = didx >= 0 ? series[didx] : undefined;
-
+  // 微分指標
+  const didx = pickDerivativeIndex(calcSeries);
+  const dpoint = didx >= 0 ? calcSeries[didx] : undefined;
   const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
-  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
+  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 3600     : 0;  // /min² → /h²
 
-  // グラフ用データ
-  const binHours = BIN_MIN / 60;
-  const binCounts = series.map(s => s.V);                  // そのビンの記事数
-  const rateSeries = series.map(s => (s.V / binHours));    // 記事/時
-  const d = diff(rateSeries);                              // レート差分（近似加速度）
+  // 左グラフのデータ（件数をそのまま描画）
+  const binCounts = calcSeries.map((s, i) => ({ t: i, v: s.V }));
+
+  // 2) 注釈用：簡易キーワード抽出 → 時間バケット
+  const articlesWithKW = React.useMemo(() => {
+    return (articles || []).map(a => ({
+      ...a,
+      value: 1,
+      keywords: Array.isArray(a.keywords) && a.keywords.length
+        ? a.keywords
+        : String(a.title || "")
+            .split(/\W+/)
+            .filter(w => w.length >= 3)
+            .slice(0, 2),
+    }));
+  }, [articles]);
+
+  const labelSeries = React.useMemo(
+    () => buildSeriesWithLabels(articlesWithKW, { threshold: 3 }),
+    [articlesWithKW]
+  );
 
   // デバッグ
-  console.log("[RSS] series:", series);
-  console.log("[RSS] exposure:", exposure, "(min-weighted)");
-  console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
-  console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
+  console.log("[HUD] calcSeries.len=", calcSeries.length, "labelSeries.len=", labelSeries.length);
+  console.log("[HUD] exposure=", exposure, "slope(/h)=", slopePerHour, "accel(/h^2)=", accelPerHour2);
+
   return (
     <div className="relative z-10 px-6 pb-4">
       <Card>
@@ -1066,15 +483,15 @@ function CalculusOverview({ articles, loading }) {
             <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
             <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
             <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-            <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
+            <Metric label="記事数" value={loading ? "-" : String(articles?.length ?? 0)} />
           </div>
 
           <div className="mt-3 grid lg:grid-cols-2 gap-3">
-            {/* 左：記事数(ビン)の推移 */}
+            {/* 左：記事数(ビン)の推移（calcSeries） */}
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={binCounts.map((v, i) => ({ t: i, v }))}
+                  data={binCounts}
                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
                 >
                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
@@ -1085,17 +502,36 @@ function CalculusOverview({ articles, loading }) {
               </ResponsiveContainer>
             </div>
 
-            {/* 右：記事レート(記事/時)の差分＝レート変化 */}
+            {/* 右：スパイク点にキーワードラベル（labelSeries） */}
             <div className="h-28">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={d.map((v, i) => ({ t: i, v }))}
-                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
-                  <XAxis dataKey="t" hide /><YAxis hide />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="v" dot={false} stroke="#67e8f9" strokeWidth={2} />
+                <LineChart data={labelSeries}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(t) => new Date(t).toLocaleString()}
+                    formatter={(v) => [v, "Value"]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    dot={false}
+                    stroke="#67e8f9"
+                    strokeWidth={2}
+                    isAnimationActive={false}
+                  >
+                    <LabelList
+                      dataKey="label"
+                      position="top"
+                      offset={12}
+                      className="fill-cyan-300"
+                      style={{ fontSize: 12, fontWeight: 600 }}
+                    />
+                  </Line>
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1105,6 +541,340 @@ function CalculusOverview({ articles, loading }) {
     </div>
   );
 }
+
+function CalculusOverview({ articles, loading }) {
+  
+  const BIN_MIN = 30;
+
+  // 計算用シリーズ（記事数 V、露出 exposure、傾き slope、加速度 accel を含む）
+  const calcSeries = React.useMemo(
+    () => buildTimeSeries(articles || [], { binMs: BIN_MIN * 60_000 }),
+    [articles]
+  );
+
+  const has = calcSeries.length > 0;
+  const last = has ? calcSeries[calcSeries.length - 1] : undefined;
+  const exposure = Number.isFinite(last?.exposure) ? last.exposure : 0;
+
+  // 傾き/加速度の参照点（末尾近傍の有効点）
+  const didx = pickDerivativeIndex(calcSeries);
+  const dpoint = didx >= 0 ? calcSeries[didx] : undefined;
+  const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60   : 0;   // /min → /h
+  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 3600 : 0;   // /min² → /h²
+
+  // 左グラフ：ビンごとの記事数
+  const binCounts = calcSeries.map((s, i) => ({ t: i, v: s.V }));
+
+  // 右グラフ：キーワード注釈（タイトルから簡易抽出→スパイクにラベル）
+  const articlesWithKW = React.useMemo(() => {
+    return (articles || []).map(a => ({
+      ...a,
+      value: 1,
+      keywords: Array.isArray(a.keywords) && a.keywords.length
+        ? a.keywords
+        : String(a.title || "")
+            .split(/\W+/)
+            .filter(w => w.length >= 3)
+            .slice(0, 2),
+    }));
+  }, [articles]);
+
+  const labelSeries = React.useMemo(
+    () => buildSeriesWithLabels(articlesWithKW, { threshold: 3 }),
+    [articlesWithKW]
+  );
+
+  console.log("[HUD] calcSeries.len=", calcSeries.length, "labelSeries.len=", labelSeries.length);
+  console.log("[HUD] exposure=", exposure, "slope(/h)=", slopePerHour, "accel(/h^2)=", accelPerHour2);
+
+  return (
+    <div className="relative z-10 px-6 pb-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-4 gap-3">
+            <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
+            <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
+            <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
+            <Metric label="記事数" value={loading ? "-" : String(articles?.length ?? 0)} />
+          </div>
+
+          <div className="mt-3 grid lg:grid-cols-2 gap-3">
+            {/* 左：記事数(ビン) */}
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={binCounts}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
+                  <XAxis dataKey="t" hide /><YAxis hide />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 右：スパイクにキーワードラベル */}
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={labelSeries}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(t) => new Date(t).toLocaleString()}
+                    formatter={(v) => [v, "Value"]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    dot={false}
+                    stroke="#67e8f9"
+                    strokeWidth={2}
+                    isAnimationActive={false}
+                  >
+                    <LabelList
+                      dataKey="label"
+                      position="top"
+                      offset={12}
+                      className="fill-cyan-300"
+                      style={{ fontSize: 12, fontWeight: 600 }}
+                    />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+// function CalculusOverview({ articles, loading }) {
+//   // 30分ビン
+//   const BIN_MIN = 30;
+//   // const series = React.useMemo(
+//   //   () => buildTimeSeries(articles, { binMs: BIN_MIN * 60_000 }),
+//   //   [articles]
+//   // );
+
+// const series = React.useMemo(() => {
+//   // items は {time, value, keywords[]} を含むようにしておく
+//   return buildSeriesWithLabels(articles || [], { threshold: 5 });
+// }, [articles]);
+
+//   // 最終点（.at(-1) 非使用）
+//    const hasSeries = series.length > 0;
+//   const exposure = hasSeries ? series[series.length - 1].exposure : 0;
+
+//   // 微分用の参照点を選ぶ
+//   const didx = pickDerivativeIndex(series);
+//   const dpoint = didx >= 0 ? series[didx] : undefined;
+
+//   const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
+//   const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 60 * 60 : 0;  // /min² → /h²
+
+//   // グラフ用データ
+//   const binHours = BIN_MIN / 60;
+//   const binCounts = series.map(s => s.V);                  // そのビンの記事数
+//   const rateSeries = series.map(s => (s.V / binHours));    // 記事/時
+//   const d = diff(rateSeries);                              // レート差分（近似加速度）
+
+//   // デバッグ
+//   console.log("[RSS] series:", series);
+//   console.log("[RSS] exposure:", exposure, "(min-weighted)");
+//   console.log("[RSS] slope idx:", didx, "value (/h):", slopePerHour);
+//   console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
+//   return (
+//     <div className="relative z-10 px-6 pb-4">
+//       <Card>
+//         <CardHeader className="pb-2">
+//           <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
+//         </CardHeader>
+//         <CardContent>
+//           <div className="grid md:grid-cols-4 gap-3">
+//             <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
+//             <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
+//             <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
+//             <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
+//           </div>
+function CalculusOverview({ articles, loading }) {
+  const BIN_MIN = 30;
+
+  // 1) 計算用の等間隔シリーズ（記事数・∫Vdt・dV/dt 等）
+  const calcSeries = React.useMemo(
+    () => buildTimeSeries(articles || [], { binMs: BIN_MIN * 60_000 }),
+    [articles]
+  );
+
+  const has = calcSeries.length > 0;
+  const last = has ? calcSeries[calcSeries.length - 1] : undefined;
+  const exposure = Number.isFinite(last?.exposure) ? last.exposure : 0;
+
+  // 微分指標
+  const didx = pickDerivativeIndex(calcSeries);
+  const dpoint = didx >= 0 ? calcSeries[didx] : undefined;
+  const slopePerHour  = dpoint ? (dpoint.slope  ?? 0) * 60      : 0;  // /min → /h
+  const accelPerHour2 = dpoint ? (dpoint.accel ?? 0) * 3600     : 0;  // /min² → /h²
+
+  // 左グラフのデータ（件数をそのまま描画）
+  const binCounts = calcSeries.map((s, i) => ({ t: i, v: s.V }));
+
+  // 2) 注釈用：簡易キーワード抽出 → 時間バケット
+  const articlesWithKW = React.useMemo(() => {
+    return (articles || []).map(a => ({
+      ...a,
+      value: 1,
+      keywords: Array.isArray(a.keywords) && a.keywords.length
+        ? a.keywords
+        : String(a.title || "")
+            .split(/\W+/)
+            .filter(w => w.length >= 3)
+            .slice(0, 2),
+    }));
+  }, [articles]);
+
+  const labelSeries = React.useMemo(
+    () => buildSeriesWithLabels(articlesWithKW, { threshold: 3 }),
+    [articlesWithKW]
+  );
+
+  // デバッグ
+  console.log("[HUD] calcSeries.len=", calcSeries.length, "labelSeries.len=", labelSeries.length);
+  console.log("[HUD] exposure=", exposure, "slope(/h)=", slopePerHour, "accel(/h^2)=", accelPerHour2);
+
+  return (
+    <div className="relative z-10 px-6 pb-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-cyan-100/90 tracking-wider text-sm">CALCULUS OVERVIEW</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-4 gap-3">
+            <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
+            <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
+            <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
+            <Metric label="記事数" value={loading ? "-" : String(articles?.length ?? 0)} />
+          </div>
+
+          <div className="mt-3 grid lg:grid-cols-2 gap-3">
+            {/* 左：記事数(ビン)の推移（calcSeries） */}
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={binCounts}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
+                  <XAxis dataKey="t" hide /><YAxis hide />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 右：スパイク点にキーワードラベル（labelSeries） */}
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={labelSeries}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(t) => new Date(t).toLocaleString()}
+                    formatter={(v) => [v, "Value"]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    dot={false}
+                    stroke="#67e8f9"
+                    strokeWidth={2}
+                    isAnimationActive={false}
+                  >
+                    <LabelList
+                      dataKey="label"
+                      position="top"
+                      offset={12}
+                      className="fill-cyan-300"
+                      style={{ fontSize: 12, fontWeight: 600 }}
+                    />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+//           <div className="mt-3 grid lg:grid-cols-2 gap-3">
+//             {/* 左：記事数(ビン)の推移 */}
+//             <div className="h-28">
+//               <ResponsiveContainer width="100%" height="100%">
+//                 <AreaChart
+//                   data={binCounts.map((v, i) => ({ t: i, v }))}
+//                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+//                 >
+//                   <CartesianGrid strokeOpacity={0.08} strokeDasharray="3 3" />
+//                   <XAxis dataKey="t" hide /><YAxis hide />
+//                   <Tooltip />
+//                   <Area type="monotone" dataKey="v" stroke="#22d3ee" strokeWidth={2} fill="#22d3ee22" />
+//                 </AreaChart>
+//               </ResponsiveContainer>
+//             </div>
+
+//             {/* 右：記事レート(記事/時)の差分＝レート変化 */}
+//             <div className="h-28">
+//               <ResponsiveContainer width="100%" height="100%">
+    
+//     + <LineChart data={series}>
+//   <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+//   <XAxis
+//     dataKey="time"
+//     tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: "2-digit" })}
+//   />
+//   <YAxis />
+//   <Tooltip
+//     labelFormatter={(t) => new Date(t).toLocaleString()}
+//     formatter={(v) => [v, "Value"]}
+//   />
+//   <Line
+//     type="monotone"
+//     dataKey="value"
+//     dot={false}
+//     stroke="#67e8f9"
+//     strokeWidth={2}
+//     isAnimationActive={false}
+//   >
+//     {/* ★ スパイク点にだけラベル（空文字は表示されない） */}
+//     <LabelList
+//       dataKey="label"
+//       position="top"
+//       offset={12}
+//       className="fill-cyan-300"
+//       style={{ fontSize: 12, fontWeight: 600 }}
+//     />
+//   </Line>
+// </LineChart>
+//               </ResponsiveContainer>
+//             </div>
+//           </div>
+//         </CardContent>
+//       </Card>
+//     </div>
+//   );
+// }
 
 // ─── ADD: helpers (place ABOVE CalculusOverview) ──────────────────────────────
 /** Parse to ms */
@@ -1182,6 +952,77 @@ series[i] = {
 }
 
 // ─── OPTIONAL: simple Error Boundary ──────────────────────────────────────────
+// class ErrorBoundary extends React.Component {
+//   constructor(props) {
+//     super(props);
+//     this.state = { hasError: false, msg: "" };
+//   }
+//   static getDerivedStateFromError(err) {
+//     return { hasError: true, msg: err?.message || String(err) };
+//   }
+//   componentDidCatch(err, info) {
+//     console.error("UI ErrorBoundary:", err, info);
+//   }
+
+
+// }
+
+// function bucketHour(ts) {
+//   // 時間粒度を任意で変更可（今は「時」単位）
+//   const d = new Date(ts);
+//   d.setMinutes(0, 0, 0);
+//   return d.toISOString();
+// }
+
+// function buildSeriesWithLabels(items, { threshold = 3 } = {}) {
+//   // 1) 時間バケットに集計（値とキーワード頻度）
+//   const buckets = new Map();
+//   for (const it of items) {
+//     const key = bucketHour(it.time);
+//     const b = buckets.get(key) || { time: key, value: 0, kwCounts: {} };
+//     b.value += Number(it.value ?? 0);
+//     for (const kw of it.keywords ?? []) {
+//       if (!kw) continue;
+//       b.kwCounts[kw] = (b.kwCounts[kw] || 0) + 1;
+//     }
+//     buckets.set(key, b);
+//   }
+
+//   const series = Array.from(buckets.values()).sort(
+//     (a, b) => new Date(a.time) - new Date(b.time)
+//   );
+
+//   // 2) スパイク検出（簡易：局所最大 かつ 閾値以上）
+//   return series.map((p, i, arr) => {
+//     const prev = arr[i - 1]?.value ?? p.value;
+//     const next = arr[i + 1]?.value ?? p.value;
+//     const isSpike = p.value >= threshold && p.value >= prev && p.value >= next;
+
+//     // 3) バケット内で最多のキーワードをラベルに
+//     const topKeyword =
+//       Object.entries(p.kwCounts)
+//         .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+
+//     return {
+//       time: p.time,
+//       value: p.value,
+//       label: isSpike ? topKeyword : "", // ← ここがLabelListに渡る
+//     };
+//   });
+// }
+//   render() {
+//     if (this.state.hasError) {
+//       return (
+//         <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-red-200">
+//           <div className="font-semibold">計算モジュールでエラーが発生しました</div>
+//           <div className="text-xs opacity-80">{this.state.msg}</div>
+//         </div>
+//       );
+//     }
+//     return this.props.children;
+//   }
+
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -1204,4 +1045,40 @@ class ErrorBoundary extends React.Component {
     }
     return this.props.children;
   }
+}
+
+// ─── helpers for keyword labels (クラスの外！) ─────────────────────────
+function bucketHour(ts) {
+  const d = new Date(ts);
+  d.setMinutes(0, 0, 0);
+  return d.toISOString();
+}
+
+function buildSeriesWithLabels(items, { threshold = 3 } = {}) {
+  const buckets = new Map();
+  for (const it of items ?? []) {
+    const key = bucketHour(it.time);
+    const b = buckets.get(key) || { time: key, value: 0, kwCounts: {} };
+    b.value += Number(it.value ?? 0);
+    for (const kw of it.keywords ?? []) {
+      if (!kw) continue;
+      b.kwCounts[kw] = (b.kwCounts[kw] || 0) + 1;
+    }
+    buckets.set(key, b);
+  }
+
+  const series = Array.from(buckets.values()).sort(
+    (a, b) => new Date(a.time) - new Date(b.time)
+  );
+
+  return series.map((p, i, arr) => {
+    const prev = arr[i - 1]?.value ?? p.value;
+    const next = arr[i + 1]?.value ?? p.value;
+    const isSpike = p.value >= threshold && p.value >= prev && p.value >= next;
+
+    const topKeyword =
+      Object.entries(p.kwCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+
+    return { time: p.time, value: p.value, label: isSpike ? topKeyword : "" };
+  });
 }
