@@ -14,7 +14,8 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "express": "^4.19.2",
+    "express": "^4.21.2",
+    "fast-xml-parser": "^5.2.5",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.463.0",
     "node-fetch": "^3.3.2",
