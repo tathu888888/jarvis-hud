@@ -1,4 +1,4 @@
-//試作
+
 
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -11,6 +11,55 @@ import {
 } from "recharts";
 /* -------------------- Minimal UI (inline) -------------------- */
 function cn(...xs){ return xs.filter(Boolean).join(" "); }
+
+// --- Date 正規化ユーティリティ（NewsHUD.jsx の import の下に貼る）---
+function toDateSafe(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v; // 秒なら×1000
+    const d = new Date(ms);
+    return isNaN(d) ? null : d;
+  }
+
+  if (typeof v === "string") {
+    let s = v.trim();
+
+    let d = new Date(s);
+    if (!isNaN(d)) return d;
+
+    if (/\bJST\b/i.test(s)) {
+      d = new Date(s.replace(/JST/i, "+0900"));
+      if (!isNaN(d)) return d;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+      s = s.replace(" ", "T") + "Z";
+      d = new Date(s);
+      if (!isNaN(d)) return d;
+    }
+
+    const n = Number(s);
+    if (Number.isFinite(n)) {
+      const ms = n < 1e12 ? n * 1000 : n;
+      d = new Date(ms);
+      if (!isNaN(d)) return d;
+    }
+  }
+  return null;
+}
+
+// RSSアイテムから使えそうな日時を拾って Date に
+function coerceItemDate(a) {
+  const cands = [a?.time, a?.pubDate, a?.published, a?.updated, a?.isoDate, a?.date, a?._ts];
+  for (const v of cands) {
+    const d = toDateSafe(v);
+    if (d) return d;
+  }
+  return null;
+}
+
 
 function Card({ children, className }) {
   return <div className={cn("rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 backdrop-blur-xl", className)}>{children}</div>;
@@ -35,8 +84,13 @@ function Badge({ children, variant="outline", className }) {
 
 /* ===== RSS 設定 & ユーティリティ ===== */
 const FEEDS = [
+
+
+    { source: "毎日新聞", url: "https://mainichi.jp/rss/etc/flash.rss" },
+  { source: "朝日新聞", url: "https://www.asahi.com/rss/asahi/newsheadlines.rdf" },
+  { source: "共同通信", url: "https://www.kyodo.co.jp/feed/" },
   { source: "BBC World", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
-  { source: "Reuters World", url: "http://feeds.reuters.com/Reuters/worldNews" },
+  // { source: "Reuters World", url: "http://feeds.reuters.com/Reuters/worldNews" },
   { source: "NHK 国際", url: "https://www3.nhk.or.jp/rss/news/cat5.xml" },
 
   // 2ch 系
@@ -49,74 +103,158 @@ const FEEDS = [
   // { source: "朝日新聞", url: "https://www.asahi.com/rss/asahi/newsheadlines.rdf" },
   // { source: "共同通信", url: "https://www.kyodo.co.jp/feed/" },
 
+  
+
 //   // 海外メディア
-  // { source: "CNN Top", url: "http://rss.cnn.com/rss/edition.rss" },
+  { source: "CNN Top", url: "http://rss.cnn.com/rss/edition.rss" },
   { source: "NY Times World", url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" },
-  // { source: "The Guardian World", url: "https://www.theguardian.com/world/rss" },
+  { source: "The Guardian World", url: "https://www.theguardian.com/world/rss" },
   { source: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" },
-  // { source: "DW World", url: "https://rss.dw.com/rdf/rss-en-world" },
-  // { source: "AP News", url: "https://apnews.com/rss" },
+  { source: "DW World", url: "https://rss.dw.com/rdf/rss-en-world" },
+  { source: "AP News", url: "https://apnews.com/rss" },
 ];
 
 // CORS を回避してブラウザから直接取得する軽量プロキシ（AllOrigins）
+// async function fetchRSSviaProxy(url) {
+//   const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+//   if (!res.ok) throw new Error(`Fetch failed: ${url}`);
+//   const data = await res.json(); // { contents: "<xml...>" }
+//   return data.contents;
+// }
+
 async function fetchRSSviaProxy(url) {
-  const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-  if (!res.ok) throw new Error(`Fetch failed: ${url}`);
-  const data = await res.json(); // { contents: "<xml...>" }
+  // 1st: 自前バックエンド（/api/rss?url=...）で取得（CORS/UA/リトライ制御可）
+  try {
+    const r1 = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
+    if (r1.ok) return await r1.text(); // そのままXMLテキストを返す
+  } catch {}
+  // 2nd: Fallback（AllOrigins）。429のときは throw して上位で握りつぶす
+  const r2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+  if (!r2.ok) throw new Error(`AllOrigins failed: ${url} (${r2.status})`);
+  const data = await r2.json();
   return data.contents;
 }
 
+
 function parseRSS(xmlText, fallbackSource) {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(xmlText, "application/xml");
-  const items = [...xml.querySelectorAll("item")];
+   const parser = new DOMParser();
+   const xml = parser.parseFromString(xmlText, "application/xml");
 
-  const toDate = (s) => {
-    if (!s) return null;
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  };
-  const strip = (html) => {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html || "";
-    return (tmp.textContent || tmp.innerText || "").trim();
-  };
+ // パース失敗検出
+ if (xml.querySelector("parsererror")) return [];
 
-  return items.map((item) => {
-    const title = item.querySelector("title")?.textContent?.trim() || "";
-    const link =
-      item.querySelector("link")?.textContent?.trim() ||
-      item.querySelector("guid")?.textContent?.trim() ||
-      "";
-    const pubDateRaw = item.querySelector("pubDate")?.textContent?.trim() || "";
-    const pubDate = toDate(pubDateRaw);
-    const desc = item.querySelector("description")?.textContent || "";
+ // RSS2.0 <item> と Atom <entry> の両対応
+ const items = [...xml.querySelectorAll("item, entry")];
 
-    // media:thumbnail / media:content の画像も試す（名前空間コロンはエスケープが必要）
-    const media =
-      item.querySelector("media\\:thumbnail")?.getAttribute("url") ||
-      item.querySelector("media\\:content")?.getAttribute("url") ||
-      "";
+   const toDate = (s) => {
+     if (!s) return null;
+     const d = new Date(s);
+     return isNaN(d.getTime()) ? null : d;
+   };
+   const strip = (html) => {
+     const tmp = document.createElement("div");
+     tmp.innerHTML = html || "";
+     return (tmp.textContent || tmp.innerText || "").trim();
+   };
 
-    return {
-      title,
-      url: link,
-      source: fallbackSource,
-      time: pubDate ? pubDate.toISOString() : "",
-      summary: strip(desc),
-      image: media || "",
-      _ts: pubDate ? pubDate.getTime() : 0,
-      _key: (title + "|" + link).toLowerCase(),
-    };
-  });
-}
+   return items.map((node) => {
+
+   const isAtom = node.tagName.toLowerCase() === "entry";
+   const title = node.querySelector("title")?.textContent?.trim() || "";
+   // link: RSSはテキスト、Atomは <link href="...">
+   const link =
+     (isAtom
+       ? (node.querySelector("link[rel='alternate'][href]")?.getAttribute("href") ||
+          node.querySelector("link[href]")?.getAttribute("href"))
+       : (node.querySelector("link")?.textContent?.trim())) ||
+     node.querySelector("guid")?.textContent?.trim() ||
+     "";
+
+   // date: RSS -> pubDate, Atom -> updated or published
+   const pubDateRaw =
+     (isAtom
+       ? (node.querySelector("updated")?.textContent?.trim() ||
+          node.querySelector("published")?.textContent?.trim())
+       : (node.querySelector("pubDate")?.textContent?.trim())) || "";
+     const pubDate = toDate(pubDateRaw);
+   const desc =
+     node.querySelector("description")?.textContent ||
+     node.querySelector("content")?.textContent ||
+     node.querySelector("summary")?.textContent ||
+     "";
+ 
+
+   const media =
+     node.querySelector("media\\:thumbnail")?.getAttribute("url") ||
+     node.querySelector("media\\:content")?.getAttribute("url") ||
+     node.querySelector("enclosure[url][type^='image/']")?.getAttribute("url") ||
+     (isAtom ? node.querySelector("link[rel='enclosure'][type^='image/']")?.getAttribute("href") : "") ||
+     "";
+
+     return {
+       title,
+       url: link,
+       source: fallbackSource,
+       time: pubDate ? pubDate.toISOString() : "",
+       summary: strip(desc),
+       image: media || "",
+       _ts: pubDate ? pubDate.getTime() : 0,
+       _key: `${title}|${link}`.toLowerCase(),
+     };
+   }).filter(x => x.title || x.url); // 最低限どちらか無い行は除外
+ }
+
+// function parseRSS(xmlText, fallbackSource) {
+//   const parser = new DOMParser();
+//   const xml = parser.parseFromString(xmlText, "application/xml");
+//   const items = [...xml.querySelectorAll("item")];
+
+//   const toDate = (s) => {
+//     if (!s) return null;
+//     const d = new Date(s);
+//     return isNaN(d.getTime()) ? null : d;
+//   };
+//   const strip = (html) => {
+//     const tmp = document.createElement("div");
+//     tmp.innerHTML = html || "";
+//     return (tmp.textContent || tmp.innerText || "").trim();
+//   };
+
+//   return items.map((item) => {
+//     const title = item.querySelector("title")?.textContent?.trim() || "";
+//     const link =
+//       item.querySelector("link")?.textContent?.trim() ||
+//       item.querySelector("guid")?.textContent?.trim() ||
+//       "";
+//     const pubDateRaw = item.querySelector("pubDate")?.textContent?.trim() || "";
+//     const pubDate = toDate(pubDateRaw);
+//     const desc = item.querySelector("description")?.textContent || "";
+
+//     // media:thumbnail / media:content の画像も試す（名前空間コロンはエスケープが必要）
+//     const media =
+//       item.querySelector("media\\:thumbnail")?.getAttribute("url") ||
+//       item.querySelector("media\\:content")?.getAttribute("url") ||
+//       "";
+
+//     return {
+//       title,
+//       url: link,
+//       source: fallbackSource,
+//       time: pubDate ? pubDate.toISOString() : "",
+//       summary: strip(desc),
+//       image: media || "",
+//       _ts: pubDate ? pubDate.getTime() : 0,
+//       _key: (title + "|" + link).toLowerCase(),
+//     };
+//   });
+// }
 
 /* ===== メイン ===== */
 export default function NewsHUD() {
   // const [articles, setArticles] = useState([]);
 const [allArticles, setAllArticles] = useState([]);
 const [articleLimit, setArticleLimit] = useState(() => {
-  const v = Number(localStorage.getItem("articleLimit") || 500);
+  const v = Number(localStorage.getItem("articleLimit") || 100);
   return Number.isFinite(v) ? v : 100;
 });
 const [loading, setLoading] = useState(true);
@@ -129,20 +267,41 @@ const loadAll = async () => {
     setLoading(true);
     try {
       // 複数RSSを並列取得 → パース
-      const xmls = await Promise.all(
-        FEEDS.map(async (f) => {
-          try {
-            const xmlText = await fetchRSSviaProxy(f.url);
-            return parseRSS(xmlText, f.source);
-          } catch (e) {
-            console.warn("RSS fetch failed:", f.source, e);
-            return [];
-          }
-        })
-      );
+           const xmls = await Promise.all(
+         FEEDS.map(async (f) => {
+           try {
+             const xmlText = await fetchRSSviaProxy(f.url);
 
-      // 平坦化 → 重複除去（title+link） → pubDate降順 → 上位N件
-      const merged = xmls.flat();
+               console.log("[RSS] news:", xmlText);
+
+             return parseRSS(xmlText, f.source);
+           } catch (e) {
+             console.warn("RSS fetch failed:", f.source, e);
+             return [];
+           }
+         })
+       );
+
+
+     const merged = xmls.flat().filter(Boolean);
+      if (merged.length === 0) {
+        console.warn("No valid RSS entries. Check feeds/proxy.");
+      }
+      // const xmls = await Promise.all(
+        
+      //   FEEDS.map(async (f) => {
+      //     try {
+      //       const xmlText = await fetchRSSviaProxy(f.url);
+      //       return parseRSS(xmlText, f.source);
+      //     } catch (e) {
+      //       console.warn("RSS fetch failed:", f.source, e);
+      //       return [];
+      //     }
+      //   })
+      // );
+
+      // // 平坦化 → 重複除去（title+link） → pubDate降順 → 上位N件
+      // const merged = xmls.flat();
       const dedupMap = new Map();
       for (const it of merged) {
         if (!dedupMap.has(it._key)) dedupMap.set(it._key, it);
@@ -189,7 +348,7 @@ setAllArticles(list);   // 変更
       value={articleLimit}
       onChange={(e) => {
         const v = Number(e.target.value);
-        setArticleLimit(Number.isFinite(v) ? v : 500);
+        setArticleLimit(Number.isFinite(v) ? v : 100);
       }}
       className="w-20 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2 py-1 text-sm text-cyan-100 outline-none focus:border-cyan-300"
       title="1〜500 の範囲で指定"
@@ -468,24 +627,53 @@ function CalculusOverview({ articles, loading }) {
 
   // --- ここから “注釈（キーワードラベル）” 用のデータ作成 ---
   // 1記事=1カウントとして value=1、title から簡易キーワード抽出
-  const labeledSeries = React.useMemo(() => {
-    const toKeywords = (title = "") => {
-      // 超簡易トークナイザ：英数字トークン化＋短語除外
-      const toks = (title.toLowerCase().match(/[a-zA-Z0-9]+/g) || [])
-        .filter(w => w.length >= 3 && !["the","and","for","with","from","that","this","was","are","you","your","our","nhk","bbc","reuters"].includes(w));
-      // 上位 1〜3 件くらいで十分
-      return toks.slice(0, 3);
-    };
+  // const labeledSeries = React.useMemo(() => {
+  //   const toKeywords = (title = "") => {
+  //     // 超簡易トークナイザ：英数字トークン化＋短語除外
+  //     const toks = (title.toLowerCase().match(/[a-zA-Z0-9]+/g) || [])
+  //       .filter(w => w.length >= 3 && !["the","and","for","with","from","that","this","was","are","you","your","our","nhk","bbc","reuters"].includes(w));
+  //     // 上位 1〜3 件くらいで十分
+  //     return toks.slice(0, 3);
+  //   };
 
-    // buildSeriesWithLabels は {time,value,keywords[]} を受け取る:contentReference[oaicite:2]{index=2}
-    const items = (articles || []).map(a => ({
-      time: a.time,        // ISO string
-      value: 1,            // 1記事=1カウント
+  //   // buildSeriesWithLabels は {time,value,keywords[]} を受け取る:contentReference[oaicite:2]{index=2}
+  //   const items = (articles || []).map(a => ({
+  //     time: a.time,        // ISO string
+  //     value: 1,            // 1記事=1カウント
+  //     keywords: toKeywords(a.title || "")
+  //   }));
+  //   // 閾値は “その時間バケット内の出現合計” の簡易スパイク検出に使われる
+  //   return buildSeriesWithLabels(items, { threshold: 3 }); // ★必要に応じて 2〜5 で調整
+  // }, [articles]);
+
+  const labeledSeries = React.useMemo(() => {
+  const toKeywords = (title = "") => {
+    const toks = (title.toLowerCase().match(/[a-zA-Z0-9]+/g) || [])
+      .filter(w => w.length >= 3 && ![
+        "the","and","for","with","from","that","this","was","are","you",
+        "your","our","nhk","bbc","reuters"
+      ].includes(w));
+    return toks.slice(0, 3);
+  };
+
+  // ★★ ここで CC（coerceItemDate） を使って “必ず有効な ISO文字列” にして渡す ★★
+  let skipped = 0;
+  const items = (articles || []).map(a => {
+    const dt = coerceItemDate(a);
+    if (!dt) { skipped++; return null; }
+    return {
+      time: dt.toISOString(),   // ← ここを a.time ではなく安全化した ISO に
+      value: 1,
       keywords: toKeywords(a.title || "")
-    }));
-    // 閾値は “その時間バケット内の出現合計” の簡易スパイク検出に使われる
-    return buildSeriesWithLabels(items, { threshold: 3 }); // ★必要に応じて 2〜5 で調整
-  }, [articles]);
+    };
+  }).filter(Boolean);
+
+  if (skipped) console.warn("[RSS] skipped invalid-date items:", skipped);
+
+  // あなたの buildSeriesWithLabels の想定にそのまま合わせる
+  return buildSeriesWithLabels(items, { threshold: 3 });
+}, [articles]);
+
 
   // デバッグログ
   console.log("[RSS] series:", series);
@@ -711,3 +899,4 @@ function buildSeriesWithLabels(items, { threshold = 3 } = {}) {
     return { time: p.time, value: p.value, label: isSpike ? topKeyword : "" };
   });
 }
+

@@ -22,8 +22,9 @@ export default defineConfig({
         target: "http://localhost:8888",
         changeOrigin: true,
         // 必要ならパスを書き換え:
-        // rewrite: (p) => p.replace(/^\/api/, "/api"),
+        rewrite: (p) => p.replace(/^\/api/, "/api"),
       },
     },
   },
 });
+
