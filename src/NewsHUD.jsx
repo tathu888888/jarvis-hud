@@ -12,6 +12,7 @@ import {
 /* -------------------- Minimal UI (inline) -------------------- */
 function cn(...xs){ return xs.filter(Boolean).join(" "); }
 
+
 // --- Date 正規化ユーティリティ（NewsHUD.jsx の import の下に貼る）---
 function toDateSafe(v) {
   if (!v) return null;
@@ -204,52 +205,18 @@ function parseRSS(xmlText, fallbackSource) {
    }).filter(x => x.title || x.url); // 最低限どちらか無い行は除外
  }
 
-// function parseRSS(xmlText, fallbackSource) {
-//   const parser = new DOMParser();
-//   const xml = parser.parseFromString(xmlText, "application/xml");
-//   const items = [...xml.querySelectorAll("item")];
-
-//   const toDate = (s) => {
-//     if (!s) return null;
-//     const d = new Date(s);
-//     return isNaN(d.getTime()) ? null : d;
-//   };
-//   const strip = (html) => {
-//     const tmp = document.createElement("div");
-//     tmp.innerHTML = html || "";
-//     return (tmp.textContent || tmp.innerText || "").trim();
-//   };
-
-//   return items.map((item) => {
-//     const title = item.querySelector("title")?.textContent?.trim() || "";
-//     const link =
-//       item.querySelector("link")?.textContent?.trim() ||
-//       item.querySelector("guid")?.textContent?.trim() ||
-//       "";
-//     const pubDateRaw = item.querySelector("pubDate")?.textContent?.trim() || "";
-//     const pubDate = toDate(pubDateRaw);
-//     const desc = item.querySelector("description")?.textContent || "";
-
-//     // media:thumbnail / media:content の画像も試す（名前空間コロンはエスケープが必要）
-//     const media =
-//       item.querySelector("media\\:thumbnail")?.getAttribute("url") ||
-//       item.querySelector("media\\:content")?.getAttribute("url") ||
-//       "";
-
-//     return {
-//       title,
-//       url: link,
-//       source: fallbackSource,
-//       time: pubDate ? pubDate.toISOString() : "",
-//       summary: strip(desc),
-//       image: media || "",
-//       _ts: pubDate ? pubDate.getTime() : 0,
-//       _key: (title + "|" + link).toLowerCase(),
-//     };
-//   });
-// }
 
 /* ===== メイン ===== */
+function toCompactItems(articles = []) {
+  return articles.slice(0, 500).map(a => ({
+    title: a?.title ?? "",
+    summary: a?.summary ?? "",
+    source: a?.source ?? "",
+    time:   a?.time   ?? "", // ISO文字列
+    note:   a?.ai ?? a?.note ?? ""  // ★ 追加: AI解説を一緒に送る
+  }));
+}
+
 export default function NewsHUD() {
   // const [articles, setArticles] = useState([]);
 const [allArticles, setAllArticles] = useState([]);
@@ -259,10 +226,49 @@ const [articleLimit, setArticleLimit] = useState(() => {
 });
 const [loading, setLoading] = useState(true);
 
+
+
+
 // ★追加: 表示件数でスライスした articles 配列
 const articles = React.useMemo(() => {
   return allArticles.slice(0, clamp(articleLimit, 1, 500));
 }, [allArticles, articleLimit]);
+
+
+
+
+
+
+async function runForecast({ articles, horizonDays = 14 }) {
+  const payload = {
+    items: toCompactItems(articles),
+    horizonDays
+  };
+
+  const res = await fetch("/api/forecast" , {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload), // ← ここに articles を直接入れない
+  });
+
+  const text = await res.text();            // まず text で受ける（400/502でも読める）
+  if (!res.ok) {
+    throw new Error(`Forecast API ${res.status}: ${text}`);
+  }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Forecast API 非JSON応答: ${text}`);
+  }
+  return json;
+}
+
+  const [forecast, setForecast] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const MAX_SEND = 500;
+
+
 const loadAll = async () => {
     setLoading(true);
     try {
@@ -287,21 +293,7 @@ const loadAll = async () => {
       if (merged.length === 0) {
         console.warn("No valid RSS entries. Check feeds/proxy.");
       }
-      // const xmls = await Promise.all(
-        
-      //   FEEDS.map(async (f) => {
-      //     try {
-      //       const xmlText = await fetchRSSviaProxy(f.url);
-      //       return parseRSS(xmlText, f.source);
-      //     } catch (e) {
-      //       console.warn("RSS fetch failed:", f.source, e);
-      //       return [];
-      //     }
-      //   })
-      // );
-
-      // // 平坦化 → 重複除去（title+link） → pubDate降順 → 上位N件
-      // const merged = xmls.flat();
+ 
       const dedupMap = new Map();
       for (const it of merged) {
         if (!dedupMap.has(it._key)) dedupMap.set(it._key, it);
@@ -324,7 +316,17 @@ setAllArticles(list);   // 変更
   };
 
   useEffect(() => { loadAll(); }, []);
-
+ const handleRunForecast = async () => {
+   try {
+     setForecastLoading(true);
+     const data = await runForecast({ articles, horizonDays: 14 });
+     setForecast(data);
+   } catch (e) {
+     setForecast({ error: `フォーキャスト生成に失敗: ${String(e?.message || e)}` });
+   } finally {
+     setForecastLoading(false);
+   }
+ };
   return (
     <div className="relative min-h-screen w-full bg-black text-cyan-100 overflow-hidden">
       <HUDGrid />
@@ -336,6 +338,8 @@ setAllArticles(list);   // 変更
           <span className="tracking-widest text-cyan-200/90">J.A.R.V.I.S. // NEWS FEED</span>
           <Badge variant="outline">{loading ? "LOADING" : "LIVE"}</Badge>
         </div>
+
+
 
          <div className="flex items-center gap-3">
     <label className="text-xs text-cyan-200/80">
@@ -363,8 +367,18 @@ setAllArticles(list);   // 変更
     </div>
   </div>
 </div>
+
       {/* Calculus / DS block */}
-      <CalculusOverview articles={articles} loading={loading} />
+
+      <CalculusOverview
+        articles={articles}
+        loading={loading}
+        forecast={forecast}
+        forecastLoading={forecastLoading}
+        // runForecast={runForecast}
+         runForecast={handleRunForecast}
+     />     
+    
 
     
       {/* News List */}
@@ -590,9 +604,7 @@ function pickDerivativeIndex(series) {
   return n - 2;
 }
 
-
-function CalculusOverview({ articles, loading }) {
-  // 30分ビン
+function CalculusOverview({ articles, loading, forecast, forecastLoading, runForecast }) {  // 30分ビン
   const BIN_MIN = 30;
 
   // --- 既存の時系列（総露出・傾き・加速度） ---
@@ -625,26 +637,6 @@ function CalculusOverview({ articles, loading }) {
   const rateSeries = series.map(s => (s.V / binHours));
   const d          = diff(rateSeries); // 参考：レート差分
 
-  // --- ここから “注釈（キーワードラベル）” 用のデータ作成 ---
-  // 1記事=1カウントとして value=1、title から簡易キーワード抽出
-  // const labeledSeries = React.useMemo(() => {
-  //   const toKeywords = (title = "") => {
-  //     // 超簡易トークナイザ：英数字トークン化＋短語除外
-  //     const toks = (title.toLowerCase().match(/[a-zA-Z0-9]+/g) || [])
-  //       .filter(w => w.length >= 3 && !["the","and","for","with","from","that","this","was","are","you","your","our","nhk","bbc","reuters"].includes(w));
-  //     // 上位 1〜3 件くらいで十分
-  //     return toks.slice(0, 3);
-  //   };
-
-  //   // buildSeriesWithLabels は {time,value,keywords[]} を受け取る:contentReference[oaicite:2]{index=2}
-  //   const items = (articles || []).map(a => ({
-  //     time: a.time,        // ISO string
-  //     value: 1,            // 1記事=1カウント
-  //     keywords: toKeywords(a.title || "")
-  //   }));
-  //   // 閾値は “その時間バケット内の出現合計” の簡易スパイク検出に使われる
-  //   return buildSeriesWithLabels(items, { threshold: 3 }); // ★必要に応じて 2〜5 で調整
-  // }, [articles]);
 
   const labeledSeries = React.useMemo(() => {
   const toKeywords = (title = "") => {
@@ -685,10 +677,17 @@ function CalculusOverview({ articles, loading }) {
   return (
     <div className="relative z-10 px-6 pb-4">
       <Card>
-        <CardHeader className="pb-2">
+         <CardHeader className="pb-2 flex items-center justify-between">
           <CardTitle className="text-cyan-100/90 tracking-wider text-sm">
             CALCULUS OVERVIEW
           </CardTitle>
+          <button
+            onClick={runForecast}
+            className="rounded-md border border-cyan-400/40 bg-cyan-400/10 px-3 py-1 text-xs hover:bg-cyan-400/20"
+            title="表示中(上限500)の記事＋noteをOpenAIに送り近未来予測を生成"
+          >
+            総合予測 (7–14日)
+          </button>
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-4 gap-3">
@@ -699,6 +698,7 @@ function CalculusOverview({ articles, loading }) {
             <Metric label="平均傾き dV/dt" value={avgSlope.toFixed(2)} unit="/h" color={sparkColor(avgSlope)} />
   <Metric label="平均加速度 d²V/dt²" value={avgAccel.toFixed(2)} unit="/h²" color={sparkColor(avgAccel)} /> 
           </div>
+
 
           <div className="mt-3 grid lg:grid-cols-2 gap-3">
             {/* 左：記事数(ビン)の推移（既存のエリアチャート） */}
@@ -758,9 +758,96 @@ function CalculusOverview({ articles, loading }) {
               </ResponsiveContainer>
             </div>
           </div>
+
+             {/* ▼▼▼ Forecast 結果をカード内に埋め込み ▼▼▼ */}
+         {forecastLoading ? (
+           <div className="mt-4 text-cyan-300">総合予測を生成中…</div>
+         ) : forecast ? (
+           <div className="mt-4">
+             <GlassCard title="WORLD FORECAST (近未来 7–14日)">
+               {forecast.error ? (
+                 <div className="text-rose-300">{forecast.error}</div>
+               ) : (
+                 <div className="space-y-3 text-sm text-cyan-100/90">
+                   <div className="opacity-80">
+                     生成日時(JST): {forecast.as_of_jst} / カバレッジ: {forecast.coverage_count}
+                   </div>
+                   <div>
+                     <div className="font-semibold">Top Themes</div>
+                     <ul className="list-disc ml-5">
+                       {(forecast.top_themes || []).map((t, i) => <li key={i}>{t}</li>)}
+                     </ul>
+                   </div>
+
+                            <div>
+           <div className="font-semibold">Signals</div>
+           {!(forecast.signals && forecast.signals.length) ? (
+             <div className="opacity-80">なし</div>
+           ) : (
+             <ul className="list-disc ml-5 space-y-1">
+               {forecast.signals.map((s, i) => (
+                 <li key={i}>
+                   <div className="font-semibold">{s.headline}</div>
+                   <div className="opacity-90">{s.why_it_matters}</div>
+                   <div className="opacity-70">
+                     {s.region ? `Region: ${s.region} / ` : ""}
+                     {typeof s.confidence === "number" ? `Confidence: ${s.confidence}` : ""}
+                     {typeof s.window_days === "number" ? ` / Window: ${s.window_days}d` : ""}
+                   </div>
+                 </li>
+               ))}
+             </ul>
+           )}
+         </div>
+                   <div>
+                     <div className="font-semibold">Scenarios (7–14d)</div>
+                     <ul className="list-disc ml-5 space-y-1">
+                       {(forecast.scenarios_7_14d || []).map((sc, i) => (
+                         <li key={i}>
+                           <span className="font-semibold">{sc.name}</span> — {sc.description}
+                           {typeof sc.probability === "number" ? ` (p≈${Math.round(sc.probability*100)}%)` : ""}
+                           {Array.isArray(sc.triggers) && sc.triggers.length ? (
+                             <div className="opacity-80">Triggers: {sc.triggers.join(", ")}</div>
+                           ) : null}
+                           {Array.isArray(sc.watchlist) && sc.watchlist.length ? (
+                             <div className="opacity-80">Watchlist: {sc.watchlist.join(", ")}</div>
+                           ) : null}
+                         </li>
+                       ))}
+                     </ul>
+                   </div>
+                   {forecast.gaia_lens ? (
+                     <div>
+                       <div className="font-semibold">Gaia Lens（地球システム）</div>
+                       <div>Climate signals: {(forecast.gaia_lens.climate_signals || []).join(" / ")}</div>
+                       <div>Environmental risks: {(forecast.gaia_lens.environmental_risks || []).join(" / ")}</div>
+                       <div className="opacity-80">{forecast.gaia_lens.note}</div>
+                     </div>
+                   ) : null}
+                   {forecast.horoscope_narrative ? (
+                     <div>
+                       <div className="font-semibold">Horoscope-style（遊びの比喩）</div>
+                       <div className="opacity-90">{forecast.horoscope_narrative}</div>
+                     </div>
+                   ) : null}
+                   <div className="opacity-80">
+                     Caveats: {forecast.caveats || "This is a speculative synthesis of headlines/notes only."}
+                   </div>
+                   {typeof forecast.confidence_overall === "number" ? (
+                     <div className="opacity-80">Overall confidence: {Math.round(forecast.confidence_overall * 100)}%</div>
+                   ) : null}
+                 </div>
+               )}
+             </GlassCard>
+           </div>
+         ) : null}
+         {/* ▲▲▲ ここまで Forecast ▲▲▲ */}
+
         </CardContent>
       </Card>
+      
     </div>
+    
   );
 }
 
