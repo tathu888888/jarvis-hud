@@ -29,7 +29,7 @@ app.post("/api/annotate", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-5",
         input: [
           {
             role: "system",
@@ -306,7 +306,7 @@ app.get("/api/aggregate", async (req, res) => {
 // const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const MODEL_FAST = "gpt-4o-mini"; // 部分要約用（高速・安価）
-const MODEL_FINAL = "gpt-4o";     // 最終統合用（精度重視）
+const MODEL_FINAL = "gpt-5";     // 最終統合用（精度重視）
 
 // Responses APIを叩いて "output_text" を取り出すユーティリティ（json_object前提）
 async function callResponses({ model, system, user, temperature = 0.2 }) {
@@ -400,30 +400,59 @@ app.post("/api/forecast", async (req, res) => {
 
     // ===== 2) REDUCE: 最終統合（ホロスコープ＆ガイア理論含む完全JSON）=====
     const sysFinal = "Answer in Japanese unless the input is in another language.";
-    const usrFinal =
-      [
-        "You are a geopolitical analyst.",
-        `Timezone: JST. Horizon: ${horizonDays} days.`,
-        "Merge the CHUNK_SUMMARIES JSON to produce a near-term world forecast.",
-        "Return a single JSON object with keys:",
-        // ★ 要件：ホロスコープ & ガイア理論 を含む
-        "as_of_jst (string), coverage_count (int),",
-        "top_themes (string[]),",
-        "signals (array of { headline, why_it_matters, region?, confidence? (0-1), window_days? (int) }),",
-        "scenarios_7_14d (array of { name, description, probability (0-1), triggers[], watchlist[] }),",
-        "gaia_lens (object: { climate_signals: string[], environmental_risks: string[], note: string }),",
-        "horoscope_narrative (string),",
-        "caveats (string),",
-        "confidence_overall (0-1 number).",
-        "",
-        "Rules:",
-        "- Use only information implied by CHUNK_SUMMARIES.",
-        "- Keep it concise and non-speculative; avoid inventing facts.",
-        "- Horoscope is playful metaphor; label nothing as confirmed.",
-        "",
-        "CHUNK_SUMMARIES:",
-        JSON.stringify(partials)
-      ].join("\n");
+  const usrFinal = [
+  "あなたは地政学アナリストです。同時に、西洋占星術のアーキタイプとガイア理論（地球を一つの自己調整システムとみなす仮説）を“比喩”として用いて、ニュースの含意をわかりやすく説明します（断定・占断はしない）。",
+  `Timezone: JST. Horizon: ${horizonDays} days.`,
+  "CHUNK_SUMMARIES を統合して、近未来（7〜14日）の世界動向予報を作成してください。",
+  "出力は次のキーを持つ単一の JSON オブジェクトとします：",
+  "as_of_jst (string), coverage_count (int),",
+  "top_themes (string[]),",
+  "signals (array of { headline, why_it_matters, region?, confidence? (0-1), window_days? (int) }),",
+  "scenarios_7_14d (array of { name, description, probability (0-1), triggers[], watchlist[] }),",
+  "gaia_lens (object: { climate_signals: string[], environmental_risks: string[], note: string }),",
+  "horoscope_narrative (string),",
+  "caveats (string),",
+  "confidence_overall (0-1 number).",
+  "",
+  "Rules:",
+  "- 事実根拠は CHUNK_SUMMARIES に含意される範囲のみ。新事実を作らない。",
+  "- 簡潔で明瞭に。数値は 0〜1 の小数（例: 0.72）。",
+  "- 日本語で書く。",
+  "- 占星術・ガイア理論は“比喩・物語装置”としてのみ使用し、天体配置や地球意識を事実として主張しない。",
+  "",
+  "占星術レンズ（比喩の指針）:",
+  "- 牡羊座: 先制・衝突・軍事的イニシアチブ",
+  "- 牡牛座: 資源・物価・エネルギー・供給網",
+  "- 双子座: 情報・通信・世論・テック伝搬",
+  "- 蟹座: 内政・領土防衛・避難民・社会的安全網",
+  "- 獅子座: 指導者・威信・レジームの演出",
+  "- 乙女座: 保健・生産性・品質・ロジスティクス",
+  "- 天秤座: 外交・同盟・法制度・均衡",
+  "- 蠍座: 秘密・金融リスク・制裁・情報機関",
+  "- 射手座: 外交圏拡大・理念・越境政策",
+  "- 山羊座: 制度・規制・官僚制・マクロ安定",
+  "- 水瓶座: 破壊的技術・ネットワーク・社会運動",
+  "- 魚座: 人道・災害・境界の溶解・誤情報",
+  "",
+  "ガイア理論レンズ（比喩の指針）:",
+  "- 大気・海洋・生態系のバランス",
+  "- 災害や異常気象の波及",
+  "- 人類活動と地球システムのフィードバック",
+  "- エネルギー・資源利用の持続性",
+  "",
+  "各セクションの書き方:",
+  "- top_themes: CHUNK_SUMMARIES から主要3〜6テーマ。占星術語・ガイア的表現は付記レベルに留める。",
+  "- signals[].confidence: 出典の明確さ・一致度・時期近接性から 0〜1 で主観スコア化。",
+  "- scenarios_7_14d: 2〜4件。名称は短く、引き金（triggers）と監視項目（watchlist）を具体化。",
+  "- gaia_lens: 気候・環境に関する含意を抽出。ガイア比喩を1〜2文加える。",
+  "- horoscope_narrative: 2〜5文。12サイン比喩で“今期の空気感”を説明。",
+  "- caveats: データ偏り、タイムラグ、シグナルの不確実性。",
+  "- confidence_overall: 全体の自信度を 0〜1。",
+  "",
+  "CHUNK_SUMMARIES:",
+  JSON.stringify(partials)
+].join("\n");
+
 
     const finalText = await callResponses({
       model: MODEL_FINAL,

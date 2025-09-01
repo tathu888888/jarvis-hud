@@ -826,7 +826,7 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
                    ) : null}
                    {forecast.horoscope_narrative ? (
                      <div>
-                       <div className="font-semibold">Horoscope-style（遊びの比喩）</div>
+                       <div className="font-semibold">Horoscope-style（占星術）</div>
                        <div className="opacity-90">{forecast.horoscope_narrative}</div>
                      </div>
                    ) : null}
