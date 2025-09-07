@@ -208,13 +208,24 @@ function parseRSS(xmlText, fallbackSource) {
 
 /* ===== メイン ===== */
 function toCompactItems(articles = []) {
-  return articles.slice(0, 500).map(a => ({
-    title: a?.title ?? "",
-    summary: a?.summary ?? "",
-    source: a?.source ?? "",
-    time:   a?.time   ?? "", // ISO文字列
-    note:   a?.ai ?? a?.note ?? ""  // ★ 追加: AI解説を一緒に送る
-  }));
+  // return articles.slice(0, 500).map(a => ({
+  //   title: a?.title ?? "",
+  //   summary: a?.summary ?? "",
+  //   source: a?.source ?? "",
+  //   time:   a?.time   ?? "", // ISO文字列
+  //   note:   a?.ai ?? a?.note ?? ""  // ★ 追加: AI解説を一緒に送る
+  // }));
+
+  return articles.slice(0, 500).map(a => {
+    const dt = coerceItemDate(a);            // ← ここで安全化
+    return {
+      title: a?.title ?? "",
+      summary: a?.summary ?? "",
+      source: a?.source ?? "",
+      time:   dt ? dt.toISOString() : "",    // ← 必ずISOで渡す
+      note:   a?.ai ?? a?.note ?? ""
+    };
+  });
 }
 
 export default function NewsHUD() {
@@ -237,7 +248,7 @@ const articles = React.useMemo(() => {
 
 
 
-
+ const API_BASE = "http://localhost:8000";
 
 async function runForecast({ articles, horizonDays = 14 }) {
   const payload = {
@@ -246,6 +257,7 @@ async function runForecast({ articles, horizonDays = 14 }) {
   };
 
   const res = await fetch("/api/forecast" , {
+    // const res = await fetch(`${API_BASE}/api/forecast`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload), // ← ここに articles を直接入れない
@@ -550,17 +562,34 @@ function useSimSeries(seed = 0, len = 120) {
 
 function sparkColor(slope) { return slope > 0 ? "#22d3ee" : "#f472b6"; }
 
-function Metric({ label, value, unit, color }) {
-  return (
-    <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-2">
-      <div className="opacity-70 text-[10px]">{label}</div>
-      <div className="text-cyan-100 font-mono">
-        <span style={{ color: color || undefined }}>{value}</span>
-        {unit ? <span className="opacity-70 ml-1">{unit}</span> : null}
-      </div>
-    </div>
-  );
+// function Metric({ label, value, unit, color }) {
+//   return (
+//     <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-2">
+//       <div className="opacity-70 text-[10px]">{label}</div>
+//       <div className="text-cyan-100 font-mono">
+//         <span style={{ color: color || undefined }}>{value}</span>
+//         {unit ? <span className="opacity-70 ml-1">{unit}</span> : null}
+//       </div>
+//     </div>
+//   );
+// }
+
+function Metric({ label, value, unit, color, note }) {
+return (
+<div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-2">
+<div className="opacity-70 text-[10px]">{label}</div>
+<div className="text-cyan-100 font-mono">
+<span style={{ color: color || undefined }}>{value}</span>
+{unit ? <span className="opacity-70 ml-1">{unit}</span> : null}
+</div>
+{note ? (
+<div className="text-[10px] mt-1 text-cyan-200/80">{note}</div>
+) : null}
+</div>
+);
 }
+
+
 
 
 const aiCache = new Map(); // title をキーにキャッシュ
@@ -690,14 +719,47 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
           </button>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-4 gap-3">
-            <Metric label="総露出 ∫V dt（分重み）" value={Math.round(exposure)} />
-            <Metric label="傾き dV/dt" value={slopePerHour.toFixed(2)} unit="/h" color={sparkColor(slopePerHour)} />
-            <Metric label="加速度 d²V/dt²" value={accelPerHour2.toFixed(2)} unit="/h²" color={sparkColor(accelPerHour2)} />
-            <Metric label="記事数" value={loading ? "-" : String(articles.length)} />
-            <Metric label="平均傾き dV/dt" value={avgSlope.toFixed(2)} unit="/h" color={sparkColor(avgSlope)} />
-  <Metric label="平均加速度 d²V/dt²" value={avgAccel.toFixed(2)} unit="/h²" color={sparkColor(avgAccel)} /> 
-          </div>
+<div className="grid md:grid-cols-4 gap-3">
+  <Metric
+    label="総露出 ∫V dt（分重み）"
+    value={Math.round(exposure)}
+    note={describeExposure(exposure)}
+  />
+  <Metric
+    label="傾き dV/dt"
+    value={slopePerHour.toFixed(2)}
+    unit="/h"
+    color={sparkColor(slopePerHour)}
+    note={describeSlope(slopePerHour)}
+  />
+  <Metric
+    label="加速度 d²V/dt²"
+    value={accelPerHour2.toFixed(2)}
+    unit="/h²"
+    color={sparkColor(accelPerHour2)}
+    note={describeAccel(accelPerHour2)}
+  />
+  <Metric
+    label="記事数"
+    value={loading ? "-" : String(articles.length)}
+    note={!loading ? describeCount(articles.length) : "読み込み中"}
+  />
+  <Metric
+    label="平均傾き dV/dt"
+    value={avgSlope.toFixed(2)}
+    unit="/h"
+    color={sparkColor(avgSlope)}
+    note={describeAvgSlope(avgSlope)}
+  />
+  <Metric
+    label="平均加速度 d²V/dt²"
+    value={avgAccel.toFixed(2)}
+    unit="/h²"
+    color={sparkColor(avgAccel)}
+    note={describeAvgAccel(avgAccel)}
+  />
+</div>
+          
 
 
           <div className="mt-3 grid lg:grid-cols-2 gap-3">
@@ -765,6 +827,74 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
          ) : forecast ? (
            <div className="mt-4">
              <GlassCard title="WORLD FORECAST (近未来 7–14日)">
+              <div className="mt-3 grid lg:grid-cols-3 gap-8">
+  <div>
+    <div className="text-xs mb-1 opacity-80">Regional Lines</div>
+    <img
+      // src={`/api/plot/regional_lines?ts=${Date.now()}`}   // cache-buster
+      src={`http://localhost:8000/api/plot/regional_lines?ts=${Date.now()}`}
+      alt="regional lines"
+      className="rounded-lg border border-cyan-400/20"
+  onError={(e) => {
+    // 1回だけリトライ
+    const img = e.currentTarget;
+    if (!img.dataset.retried) {
+      img.dataset.retried = "1";
+      setTimeout(() => {
+        img.src = `http://localhost:8000/api/plot/regional_lines?ts=${Date.now()}`;
+      }, 800);
+    } else {
+      // リトライでダメなら明示的プレースホルダへ
+      img.src = `data:image/svg+xml;utf8,` +
+        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
+    }
+  }}    />
+  </div>
+  <div>
+    <div className="text-xs mb-1 opacity-80">Spike Risk (Poisson)</div>
+    <img
+      // src={`/api/plot/risk_bars?ts=${Date.now()}`}
+      src={`http://localhost:8000/api/plot/risk_bars?ts=${Date.now()}`}
+      alt="risk bars"
+      className="rounded-lg border border-cyan-400/20"
+  onError={(e) => {
+    // 1回だけリトライ
+    const img = e.currentTarget;
+    if (!img.dataset.retried) {
+      img.dataset.retried = "1";
+      setTimeout(() => {
+        img.src = `http://localhost:8000/api/plot/risk_bars?ts=${Date.now()}`;
+      }, 800);
+    } else {
+      // リトライでダメなら明示的プレースホルダへ
+      img.src = `data:image/svg+xml;utf8,` +
+        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
+    }
+  }}    />
+  </div>
+  <div>
+    <div className="text-xs mb-1 opacity-80">Co-occurrence Network</div>
+    <img
+      // src={`/api/plot/cooccurrence?ts=${Date.now()}`}
+      src={`http://localhost:8000/api/plot/cooccurrence?ts=${Date.now()}`}
+      alt="cooccurrence graph"
+      className="rounded-lg border border-cyan-400/20"
+  onError={(e) => {
+    // 1回だけリトライ
+    const img = e.currentTarget;
+    if (!img.dataset.retried) {
+      img.dataset.retried = "1";
+      setTimeout(() => {
+        img.src = `http://localhost:8000/api/plot/cooccurrence?ts=${Date.now()}`;
+      }, 800);
+    } else {
+      // リトライでダメなら明示的プレースホルダへ
+      img.src = `data:image/svg+xml;utf8,` +
+        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
+    }
+  }}    />
+  </div>
+</div>
                {forecast.error ? (
                  <div className="text-rose-300">{forecast.error}</div>
                ) : (
@@ -985,5 +1115,53 @@ function buildSeriesWithLabels(items, { threshold = 3 } = {}) {
 
     return { time: p.time, value: p.value, label: isSpike ? topKeyword : "" };
   });
+}
+
+
+function describeExposure(exposure) {
+if (exposure >= 1000) return "露出が非常に大きい（長時間・大量）";
+if (exposure >= 300) return "露出は多め";
+if (exposure >= 100) return "露出は中程度";
+return "露出は限定的";
+}
+
+
+function describeSlope(slopePerHour) {
+if (slopePerHour >= 0.50) return "記事数が急増している（注文度高い）";
+if (slopePerHour >= 0.10) return "緩やかな増加";
+if (slopePerHour > -0.10) return "ほぼ横ばい（±0.10/h 以内）";
+if (slopePerHour > -0.50) return "緩やかな減少";
+return "減少が強まっている";
+}
+
+
+function describeAccel(accelPerHour2) {
+if (accelPerHour2 >= 1.00) return "ニュースが急加速している";
+if (accelPerHour2 >= 0.20) return "加速傾向";
+if (accelPerHour2 > -0.20) return "勢いは安定（±0.20/h² 以内）";
+if (accelPerHour2 > -1.00) return "鈍化傾向";
+return "勢いの減速が強い";
+}
+
+
+function describeCount(n) {
+if (n >= 100) return "ニュースが集中して発生";
+if (n >= 30) return "多め";
+if (n >= 10) return "やや少なめ";
+return "限定的";
+}
+
+
+function describeAvgSlope(avgSlope) {
+if (avgSlope >= 0.20) return "全体的に右肩上がり";
+if (avgSlope <= -0.20) return "全体的に減少傾向";
+return "大きな変化なし";
+}
+
+
+function describeAvgAccel(avgAccel) {
+if (avgAccel >= 0.50) return "全体的に勢いが増している";
+if (avgAccel <= -0.50) return "全体的に落ち着きつつある";
+return "ほぼ安定";
 }
 
