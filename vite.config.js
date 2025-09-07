@@ -10,10 +10,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  base: '/jarvis-hud-AI-/',
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
     },
+ allowedHosts: ['*']
   },
   server: {
     port: 5175,

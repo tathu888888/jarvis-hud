@@ -115,13 +115,7 @@ const FEEDS = [
   { source: "AP News", url: "https://apnews.com/rss" },
 ];
 
-// CORS を回避してブラウザから直接取得する軽量プロキシ（AllOrigins）
-// async function fetchRSSviaProxy(url) {
-//   const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-//   if (!res.ok) throw new Error(`Fetch failed: ${url}`);
-//   const data = await res.json(); // { contents: "<xml...>" }
-//   return data.contents;
-// }
+
 
 async function fetchRSSviaProxy(url) {
   // 1st: 自前バックエンド（/api/rss?url=...）で取得（CORS/UA/リトライ制御可）
@@ -208,13 +202,7 @@ function parseRSS(xmlText, fallbackSource) {
 
 /* ===== メイン ===== */
 function toCompactItems(articles = []) {
-  // return articles.slice(0, 500).map(a => ({
-  //   title: a?.title ?? "",
-  //   summary: a?.summary ?? "",
-  //   source: a?.source ?? "",
-  //   time:   a?.time   ?? "", // ISO文字列
-  //   note:   a?.ai ?? a?.note ?? ""  // ★ 追加: AI解説を一緒に送る
-  // }));
+
 
   return articles.slice(0, 500).map(a => {
     const dt = coerceItemDate(a);            // ← ここで安全化
@@ -276,10 +264,39 @@ async function runForecast({ articles, horizonDays = 14 }) {
   return json;
 }
 
+async function runForecast2({ articles, horizonDays = 14 }) {
+  const payload = {
+    items: toCompactItems(articles),
+    horizonDays
+  };
+
+  // const res = await fetch("/api/forecast" , {
+    const res = await fetch(`${API_BASE}/api/forecast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload), // ← ここに articles を直接入れない
+  });
+
+  const text = await res.text();            // まず text で受ける（400/502でも読める）
+  if (!res.ok) {
+    throw new Error(`Forecast API ${res.status}: ${text}`);
+  }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Forecast API 非JSON応答: ${text}`);
+  }
+  return json;
+}
+
+
   const [forecast, setForecast] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const MAX_SEND = 500;
 
+const [forecastSource, setForecastSource] = useState(null); // 'node' | 'fastapi' | null
+const isFastAPI = forecastSource === "fastapi";
 
 const loadAll = async () => {
     setLoading(true);
@@ -331,6 +348,7 @@ setAllArticles(list);   // 変更
  const handleRunForecast = async () => {
    try {
      setForecastLoading(true);
+         setForecastSource("node");           // 追加
      const data = await runForecast({ articles, horizonDays: 14 });
      setForecast(data);
    } catch (e) {
@@ -339,6 +357,23 @@ setAllArticles(list);   // 変更
      setForecastLoading(false);
    }
  };
+
+ const handleRunForecast2 = async () => {
+   try {
+     setForecastLoading(true);
+         setForecastSource("fastapi");        // 追加
+     const data = await runForecast2({ articles, horizonDays: 14 });
+     setForecast(data);
+   } catch (e) {
+     setForecast({ error: `フォーキャスト生成に失敗: ${String(e?.message || e)}` });
+   } finally {
+     setForecastLoading(false);
+   }
+ };
+
+
+ 
+
   return (
     <div className="relative min-h-screen w-full bg-black text-cyan-100 overflow-hidden">
       <HUDGrid />
@@ -389,6 +424,9 @@ setAllArticles(list);   // 変更
         forecastLoading={forecastLoading}
         // runForecast={runForecast}
          runForecast={handleRunForecast}
+         runForecast2={handleRunForecast2}
+         hideNarrative={isFastAPI}   // ★ 追加：FastAPIのときだけ非表示に
+
      />     
     
 
@@ -562,17 +600,7 @@ function useSimSeries(seed = 0, len = 120) {
 
 function sparkColor(slope) { return slope > 0 ? "#22d3ee" : "#f472b6"; }
 
-// function Metric({ label, value, unit, color }) {
-//   return (
-//     <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-2">
-//       <div className="opacity-70 text-[10px]">{label}</div>
-//       <div className="text-cyan-100 font-mono">
-//         <span style={{ color: color || undefined }}>{value}</span>
-//         {unit ? <span className="opacity-70 ml-1">{unit}</span> : null}
-//       </div>
-//     </div>
-//   );
-// }
+
 
 function Metric({ label, value, unit, color, note }) {
 return (
@@ -633,7 +661,8 @@ function pickDerivativeIndex(series) {
   return n - 2;
 }
 
-function CalculusOverview({ articles, loading, forecast, forecastLoading, runForecast }) {  // 30分ビン
+// function CalculusOverview({ articles, loading, forecast, forecastLoading, runForecast ,runForecast2 }) {  // 30分ビン
+function CalculusOverview({ articles, loading, forecast, forecastLoading, runForecast, runForecast2, hideNarrative }) {
   const BIN_MIN = 30;
 
   // --- 既存の時系列（総露出・傾き・加速度） ---
@@ -703,6 +732,9 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
   console.log("[RSS] accel idx:", didx, "value (/h^2):", accelPerHour2);
   console.log("[RSS] labeledSeries:", labeledSeries);
 
+var [forecastSource, setForecastSource] = useState(null); // 'node' | 'fastapi' | null
+var isFastAPI = forecastSource === "fastapi";
+
   return (
     <div className="relative z-10 px-6 pb-4">
       <Card>
@@ -710,13 +742,25 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
           <CardTitle className="text-cyan-100/90 tracking-wider text-sm">
             CALCULUS OVERVIEW
           </CardTitle>
-          <button
-            onClick={runForecast}
-            className="rounded-md border border-cyan-400/40 bg-cyan-400/10 px-3 py-1 text-xs hover:bg-cyan-400/20"
-            title="表示中(上限500)の記事＋noteをOpenAIに送り近未来予測を生成"
-          >
-            総合予測 (7–14日)
-          </button>
+   {/* 右側を1コンテナにまとめ、gapで制御 */}
+   <div className="flex items-center gap-2 sm:gap-2.5">
+     <button
+       onClick={runForecast}
+       className="rounded-md border border-cyan-400/40 bg-cyan-400/10 px-3 py-1 text-xs hover:bg-cyan-400/20"
+       title="表示中(上限500)の記事＋noteをOpenAIに送り近未来予測を生成"
+     >
+       総合予測 (7–14日)
+     </button>
+     <button
+       onClick={runForecast2}
+       className="rounded-md border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs hover:bg-emerald-400/20"
+       title="FastAPI(8000) を直接叩いて予測 → グラフにも反映"
+     >
+       FastAPI直呼び
+     </button>
+   </div>
+
+
         </CardHeader>
         <CardContent>
 <div className="grid md:grid-cols-4 gap-3">
@@ -822,155 +866,166 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
           </div>
 
              {/* ▼▼▼ Forecast 結果をカード内に埋め込み ▼▼▼ */}
-         {forecastLoading ? (
-           <div className="mt-4 text-cyan-300">総合予測を生成中…</div>
-         ) : forecast ? (
-           <div className="mt-4">
-             <GlassCard title="WORLD FORECAST (近未来 7–14日)">
-              <div className="mt-3 grid lg:grid-cols-3 gap-8">
-  <div>
-    <div className="text-xs mb-1 opacity-80">Regional Lines</div>
-    <img
-      // src={`/api/plot/regional_lines?ts=${Date.now()}`}   // cache-buster
-      src={`http://localhost:8000/api/plot/regional_lines?ts=${Date.now()}`}
-      alt="regional lines"
-      className="rounded-lg border border-cyan-400/20"
-  onError={(e) => {
-    // 1回だけリトライ
-    const img = e.currentTarget;
-    if (!img.dataset.retried) {
-      img.dataset.retried = "1";
-      setTimeout(() => {
-        img.src = `http://localhost:8000/api/plot/regional_lines?ts=${Date.now()}`;
-      }, 800);
-    } else {
-      // リトライでダメなら明示的プレースホルダへ
-      img.src = `data:image/svg+xml;utf8,` +
-        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
-    }
-  }}    />
-  </div>
-  <div>
-    <div className="text-xs mb-1 opacity-80">Spike Risk (Poisson)</div>
-    <img
-      // src={`/api/plot/risk_bars?ts=${Date.now()}`}
-      src={`http://localhost:8000/api/plot/risk_bars?ts=${Date.now()}`}
-      alt="risk bars"
-      className="rounded-lg border border-cyan-400/20"
-  onError={(e) => {
-    // 1回だけリトライ
-    const img = e.currentTarget;
-    if (!img.dataset.retried) {
-      img.dataset.retried = "1";
-      setTimeout(() => {
-        img.src = `http://localhost:8000/api/plot/risk_bars?ts=${Date.now()}`;
-      }, 800);
-    } else {
-      // リトライでダメなら明示的プレースホルダへ
-      img.src = `data:image/svg+xml;utf8,` +
-        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
-    }
-  }}    />
-  </div>
-  <div>
-    <div className="text-xs mb-1 opacity-80">Co-occurrence Network</div>
-    <img
-      // src={`/api/plot/cooccurrence?ts=${Date.now()}`}
-      src={`http://localhost:8000/api/plot/cooccurrence?ts=${Date.now()}`}
-      alt="cooccurrence graph"
-      className="rounded-lg border border-cyan-400/20"
-  onError={(e) => {
-    // 1回だけリトライ
-    const img = e.currentTarget;
-    if (!img.dataset.retried) {
-      img.dataset.retried = "1";
-      setTimeout(() => {
-        img.src = `http://localhost:8000/api/plot/cooccurrence?ts=${Date.now()}`;
-      }, 800);
-    } else {
-      // リトライでダメなら明示的プレースホルダへ
-      img.src = `data:image/svg+xml;utf8,` +
-        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
-    }
-  }}    />
-  </div>
-</div>
-               {forecast.error ? (
-                 <div className="text-rose-300">{forecast.error}</div>
-               ) : (
-                 <div className="space-y-3 text-sm text-cyan-100/90">
-                   <div className="opacity-80">
-                     生成日時(JST): {forecast.as_of_jst} / カバレッジ: {forecast.coverage_count}
-                   </div>
-                   <div>
-                     <div className="font-semibold">Top Themes</div>
-                     <ul className="list-disc ml-5">
-                       {(forecast.top_themes || []).map((t, i) => <li key={i}>{t}</li>)}
-                     </ul>
-                   </div>
+             
+  {forecastLoading ? (
+  <div className="mt-4 text-cyan-300">総合予測を生成中…</div>
+) : forecast ? (
+  <div className="mt-4">
+    <GlassCard title="WORLD FORECAST (近未来 7–14日)">
+      {/* 画像 3 枚のブロック */}
+      <div className="mt-3 grid lg:grid-cols-3 gap-8">
+        <div>
+          <div className="text-xs mb-1 opacity-80">Regional Lines</div>
+          <img
+            src={`http://localhost:8000/api/plot/regional_lines?ts=${Date.now()}`}
+            alt="regional lines"
+            className="rounded-lg border border-cyan-400/20"
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (!img.dataset.retried) {
+                img.dataset.retried = "1";
+                setTimeout(() => {
+                  img.src = `http://localhost:8000/api/plot/regional_lines?ts=${Date.now()}`;
+                }, 800);
+              } else {
+                img.src = `data:image/svg+xml;utf8,` +
+                  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
+              }
+            }}
+          />
+        </div>
+        <div>
+          <div className="text-xs mb-1 opacity-80">Spike Risk (Poisson)</div>
+          <img
+            src={`http://localhost:8000/api/plot/risk_bars?ts=${Date.now()}`}
+            alt="risk bars"
+            className="rounded-lg border border-cyan-400/20"
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (!img.dataset.retried) {
+                img.dataset.retried = "1";
+                setTimeout(() => {
+                  img.src = `http://localhost:8000/api/plot/risk_bars?ts=${Date.now()}`;
+                }, 800);
+              } else {
+                img.src = `data:image/svg+xml;utf8,` +
+                  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
+              }
+            }}
+          />
+        </div>
+        <div>
+          <div className="text-xs mb-1 opacity-80">Co-occurrence Network</div>
+          <img
+            src={`http://localhost:8000/api/plot/cooccurrence?ts=${Date.now()}`}
+            alt="cooccurrence graph"
+            className="rounded-lg border border-cyan-400/20"
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (!img.dataset.retried) {
+                img.dataset.retried = "1";
+                setTimeout(() => {
+                  img.src = `http://localhost:8000/api/plot/cooccurrence?ts=${Date.now()}`;
+                }, 800);
+              } else {
+                img.src = `data:image/svg+xml;utf8,` +
+                  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="transparent"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#88d" font-size="14">No regional data</text></svg>');
+              }
+            }}
+          />
+        </div>
+      </div>
 
-                            <div>
-           <div className="font-semibold">Signals</div>
-           {!(forecast.signals && forecast.signals.length) ? (
-             <div className="opacity-80">なし</div>
-           ) : (
-             <ul className="list-disc ml-5 space-y-1">
-               {forecast.signals.map((s, i) => (
-                 <li key={i}>
-                   <div className="font-semibold">{s.headline}</div>
-                   <div className="opacity-90">{s.why_it_matters}</div>
-                   <div className="opacity-70">
-                     {s.region ? `Region: ${s.region} / ` : ""}
-                     {typeof s.confidence === "number" ? `Confidence: ${s.confidence}` : ""}
-                     {typeof s.window_days === "number" ? ` / Window: ${s.window_days}d` : ""}
-                   </div>
-                 </li>
-               ))}
-             </ul>
-           )}
-         </div>
-                   <div>
-                     <div className="font-semibold">Scenarios (7–14d)</div>
-                     <ul className="list-disc ml-5 space-y-1">
-                       {(forecast.scenarios_7_14d || []).map((sc, i) => (
-                         <li key={i}>
-                           <span className="font-semibold">{sc.name}</span> — {sc.description}
-                           {typeof sc.probability === "number" ? ` (p≈${Math.round(sc.probability*100)}%)` : ""}
-                           {Array.isArray(sc.triggers) && sc.triggers.length ? (
-                             <div className="opacity-80">Triggers: {sc.triggers.join(", ")}</div>
-                           ) : null}
-                           {Array.isArray(sc.watchlist) && sc.watchlist.length ? (
-                             <div className="opacity-80">Watchlist: {sc.watchlist.join(", ")}</div>
-                           ) : null}
-                         </li>
-                       ))}
-                     </ul>
-                   </div>
-                   {forecast.gaia_lens ? (
-                     <div>
-                       <div className="font-semibold">Gaia Lens（地球システム）</div>
-                       <div>Climate signals: {(forecast.gaia_lens.climate_signals || []).join(" / ")}</div>
-                       <div>Environmental risks: {(forecast.gaia_lens.environmental_risks || []).join(" / ")}</div>
-                       <div className="opacity-80">{forecast.gaia_lens.note}</div>
-                     </div>
-                   ) : null}
-                   {forecast.horoscope_narrative ? (
-                     <div>
-                       <div className="font-semibold">Horoscope-style（占星術）</div>
-                       <div className="opacity-90">{forecast.horoscope_narrative}</div>
-                     </div>
-                   ) : null}
-                   <div className="opacity-80">
-                     Caveats: {forecast.caveats || "This is a speculative synthesis of headlines/notes only."}
-                   </div>
-                   {typeof forecast.confidence_overall === "number" ? (
-                     <div className="opacity-80">Overall confidence: {Math.round(forecast.confidence_overall * 100)}%</div>
-                   ) : null}
-                 </div>
-               )}
-             </GlassCard>
-           </div>
-         ) : null}
+      {/* ▼ FastAPI 直呼び時はここを非表示 */}
+      {!hideNarrative && (
+        <>
+          {forecast.error ? (
+            <div className="text-rose-300">{forecast.error}</div>
+          ) : (
+            <div className="space-y-3 text-sm text-cyan-100/90">
+              <div className="opacity-80">
+                生成日時(JST): {forecast.as_of_jst} / カバレッジ: {forecast.coverage_count}
+              </div>
+              <div>
+                <div className="font-semibold">Top Themes</div>
+                <ul className="list-disc ml-5">
+                  {(forecast.top_themes || []).map((t, i) => <li key={i}>{t}</li>)}
+                </ul>
+              </div>
+
+              {/* Signals */}
+              <div>
+                <div className="font-semibold">Signals</div>
+                {!(forecast.signals && forecast.signals.length) ? (
+                  <div className="opacity-80">なし</div>
+                ) : (
+                  <ul className="list-disc ml-5 space-y-1">
+                    {forecast.signals.map((s, i) => (
+                      <li key={i}>
+                        <div className="font-semibold">{s.headline}</div>
+                        <div className="opacity-90">{s.why_it_matters}</div>
+                        <div className="opacity-70">
+                          {s.region ? `Region: ${s.region} / ` : ""}
+                          {typeof s.confidence === "number" ? `Confidence: ${s.confidence}` : ""}
+                          {typeof s.window_days === "number" ? ` / Window: ${s.window_days}d` : ""}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Scenarios */}
+              <div>
+                <div className="font-semibold">Scenarios (7–14d)</div>
+                <ul className="list-disc ml-5 space-y-1">
+                  {(forecast.scenarios_7_14d || []).map((sc, i) => (
+                    <li key={i}>
+                      <span className="font-semibold">{sc.name}</span> — {sc.description}
+                      {typeof sc.probability === "number" ? ` (p≈${Math.round(sc.probability*100)}%)` : ""}
+                      {Array.isArray(sc.triggers) && sc.triggers.length ? (
+                        <div className="opacity-80">Triggers: {sc.triggers.join(", ")}</div>
+                      ) : null}
+                      {Array.isArray(sc.watchlist) && sc.watchlist.length ? (
+                        <div className="opacity-80">Watchlist: {sc.watchlist.join(", ")}</div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Gaia */}
+              {forecast.gaia_lens ? (
+                <div>
+                  <div className="font-semibold">Gaia Lens（地球システム）</div>
+                  <div>Climate signals: {(forecast.gaia_lens.climate_signals || []).join(" / ")}</div>
+                  <div>Environmental risks: {(forecast.gaia_lens.environmental_risks || []).join(" / ")}</div>
+                  <div className="opacity-80">{forecast.gaia_lens.note}</div>
+                </div>
+              ) : null}
+
+              {/* Horoscope */}
+              {forecast.horoscope_narrative ? (
+                <div>
+                  <div className="font-semibold">Horoscope-style（占星術）</div>
+                  <div className="opacity-90">{forecast.horoscope_narrative}</div>
+                </div>
+              ) : null}
+
+              <div className="opacity-80">
+                Caveats: {forecast.caveats || "This is a speculative synthesis of headlines/notes only."}
+              </div>
+
+              {typeof forecast.confidence_overall === "number" ? (
+                <div className="opacity-80">Overall confidence: {Math.round(forecast.confidence_overall * 100)}%</div>
+              ) : null}
+            </div>
+          )}
+        </>
+      )}
+    </GlassCard>
+  </div>
+) : null}
          {/* ▲▲▲ ここまで Forecast ▲▲▲ */}
 
         </CardContent>
@@ -980,6 +1035,9 @@ function CalculusOverview({ articles, loading, forecast, forecastLoading, runFor
     
   );
 }
+
+
+
 
 // ─── ADD: helpers (place ABOVE CalculusOverview) ──────────────────────────────
 /** Parse to ms */
@@ -1164,4 +1222,3 @@ if (avgAccel >= 0.50) return "全体的に勢いが増している";
 if (avgAccel <= -0.50) return "全体的に落ち着きつつある";
 return "ほぼ安定";
 }
-
