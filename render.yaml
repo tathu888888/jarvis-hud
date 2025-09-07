@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: node-api
+    env: node
+    rootDir: node-api
+    plan: free
+    buildCommand: "npm ci"
+    startCommand: "node server.js"
+    envVars:
+      - key: FRONTEND_ORIGIN
+        value: "https://YOUR_FRONTEND_ONRENDER_URL"  # 後で更新可
+
+  - type: web
+    name: py-api
+    env: python
+    rootDir: py-api
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: FRONTEND_ORIGIN
+        value: "https://YOUR_FRONTEND_ONRENDER_URL"  # 後で更新可
+
+  - type: static
+    name: frontend
+    rootDir: frontend
+    buildCommand: "npm ci && npm run build"
+    staticPublishPath: "dist"
+    envVars:
+      - key: VITE_NODE_API_BASE
+        value: "https://node-api.onrender.com"   # デプロイ後、実URLに更新
+      - key: VITE_PY_API_BASE
+        value: "https://py-api.onrender.com"     # デプロイ後、実URLに更新

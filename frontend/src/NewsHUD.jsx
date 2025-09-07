@@ -236,7 +236,9 @@ const articles = React.useMemo(() => {
 
 
 
- const API_BASE = "http://localhost:8000";
+//  const API_BASE = "http://localhost:8000";
+  const NODE_BASE = import.meta.env.VITE_NODE_API_BASE || "http://localhost:8888";
+  const PY_BASE = import.meta.env.VITE_PY_API_BASE || "http://localhost:8000";
 
 async function runForecast({ articles, horizonDays = 14 }) {
   const payload = {
@@ -244,7 +246,8 @@ async function runForecast({ articles, horizonDays = 14 }) {
     horizonDays
   };
 
-  const res = await fetch("/api/forecast" , {
+  // const res = await fetch("/api/forecast" , {
+   const res = await fetch(`${NODE_BASE}/api/forecast`, { 
     // const res = await fetch(`${API_BASE}/api/forecast`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -271,8 +274,8 @@ async function runForecast2({ articles, horizonDays = 14 }) {
   };
 
   // const res = await fetch("/api/forecast" , {
-    const res = await fetch(`${API_BASE}/api/forecast`, {
-    method: "POST",
+    // const res = await fetch(`${API_BASE}/api/forecast`, {
+    const res = await fetch(`${PY_BASE}/api/forecast`, { 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload), // ← ここに articles を直接入れない
   });
@@ -756,7 +759,7 @@ var isFastAPI = forecastSource === "fastapi";
        className="rounded-md border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs hover:bg-emerald-400/20"
        title="FastAPI(8000) を直接叩いて予測 → グラフにも反映"
      >
-       FastAPI直呼び
+       ARIMA, Poisson回帰,ベイズ推定,ネットワーク・グラフ解析
      </button>
    </div>
 
