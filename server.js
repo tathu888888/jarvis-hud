@@ -29,7 +29,7 @@ app.post("/api/annotate", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5",
+        model: "gpt-4o",
         input: [
           {
             role: "system",
@@ -306,7 +306,7 @@ app.get("/api/aggregate", async (req, res) => {
 // const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const MODEL_FAST = "gpt-4o-mini"; // 部分要約用（高速・安価）
-const MODEL_FINAL = "gpt-5";     // 最終統合用（精度重視）
+const MODEL_FINAL = "gpt-4o";     // 最終統合用（精度重視）
 
 // Responses APIを叩いて "output_text" を取り出すユーティリティ（json_object前提）
 async function callResponses({ model, system, user, temperature = 0.2 }) {
@@ -400,9 +400,9 @@ app.post("/api/forecast", async (req, res) => {
 
     // ===== 2) REDUCE: 最終統合（ホロスコープ＆ガイア理論含む完全JSON）=====
     const sysFinal = "Answer in Japanese unless the input is in another language.";
-  const usrFinal = [
+const usrFinal = [
   "あなたは地政学アナリストです。同時に、西洋占星術のアーキタイプとガイア理論（地球を一つの自己調整システムとみなす仮説）を“比喩”として用いて、ニュースの含意をわかりやすく説明します（断定・占断はしない）。",
-  `Timezone: JST. Horizon: ${horizonDays} days.`,
+  `Timezone: JST. Horizon: \${horizonDays} days.`,
   "CHUNK_SUMMARIES を統合して、近未来（7〜14日）の世界動向予報を作成してください。",
   "出力は次のキーを持つ単一の JSON オブジェクトとします：",
   "as_of_jst (string), coverage_count (int),",
@@ -434,6 +434,39 @@ app.post("/api/forecast", async (req, res) => {
   "- 水瓶座: 破壊的技術・ネットワーク・社会運動",
   "- 魚座: 人道・災害・境界の溶解・誤情報",
   "",
+  "天体アーキタイプ・レンズ（比喩補助）:",
+  "- 太陽: コア・統治意思・国家目標の焦点",
+  "- 月: 民意・生活感情・社会の安全欲求",
+  "- 水星: 情報伝達・交渉戦術・サプライの細線",
+  "- 金星: 価値・同盟の融和・資本の好悪",
+  "- 火星: 行動力・軍事ドライブ・衝突コスト",
+  "- 木星: 拡張・国際秩序・規模の経済",
+  "- 土星: 制度・規制・デフォルト回避の抑制力",
+  "- 天王星: 破壊的技術・エネルギー転換・制度逸脱",
+  "- 海王星: 物語・幻影・誤情報・境界の溶解",
+  "- 冥王星: 構造転換・集中と再配分・影の権力",
+  "- 彗星: 突発ショック・非連続なイベント注入（例: ハレー彗星=周期的話題の再来）",
+  "- 小惑星帯/外縁天体: 断片的リスクの群発・ニッチ領域の波及（例: ケレス/ベスタ=マイナー資源）",
+  "- トロヤ群小惑星: 影の随伴勢力・同盟の“追随”",
+  "- オールトの雲: 長周期の潜在リスク・遠因",
+  "- カイパーベルト: 周縁ノード・境界領域のルール形成",
+  "- ラグランジュ点（L1/L2）: 観測・監視・介入の窓（早期警戒の比喩）",
+  "- 太陽黒点/太陽活動（CME）: 通信障害・市場ボラティリティに似た周期的撹乱",
+  "- 銀河系（ミルキーウェイ）: システム全体の文脈・長周期の潮流",
+  "- 銀河中心（いて座A*）: 集中・重力の焦点・資源/権力の集中",
+  "- 大小マゼラン雲: 周辺からの補給・外部依存",
+  "- アンドロメダ銀河: 外縁からの視座・遠心力・勢力圏の競合",
+  "- パルサー: 定期信号・規律・リズム",
+  "- クエーサー: 極端なエネルギー・過剰流動性・過熱",
+  "- ダークマター/ダークエネルギー: 見えない構造・不可視の圧力（測れないが効いている要因）",
+  "- シリウス: 文明の灯台・方向付けの比喩（象徴のみ）",
+  "- アレクトゥス（一般表記: アルクトゥルス）: 転換の護送・移行支援の比喩（象徴のみ）",
+  "- プレアデス（昴）: 連帯・群知・中小アクターの共振",
+  "- オリオン/ベテルギウス/リゲル: 戦士的演出・威信競争・変調の前触れ",
+  "- ポラリス（北極星）: 指針・ナビゲーション・方位固定",
+  "- スピカ/レグルス/アンタレス/アルデバラン: 象徴資本・看板・リーダーの星像",
+  "- 二ビル（仮説天体）: 未確認伝承に基づく“不安の投影”の比喩（象徴のみ・事実主張ではない）",
+  "",
   "ガイア理論レンズ（比喩の指針）:",
   "- 大気・海洋・生態系のバランス",
   "- 災害や異常気象の波及",
@@ -445,13 +478,13 @@ app.post("/api/forecast", async (req, res) => {
   "- signals[].confidence: 出典の明確さ・一致度・時期近接性から 0〜1 で主観スコア化。",
   "- scenarios_7_14d: 2〜4件。名称は短く、引き金（triggers）と監視項目（watchlist）を具体化。",
   "- gaia_lens: 気候・環境に関する含意を抽出。ガイア比喩を1〜2文加える。",
-  "- horoscope_narrative: 2〜5文。12サイン比喩で“今期の空気感”を説明。",
+  "- horoscope_narrative: 2〜5文。12サイン比喩＋上記天体レンズを織り交ぜて“今期の空気感”を説明。",
   "- caveats: データ偏り、タイムラグ、シグナルの不確実性。",
   "- confidence_overall: 全体の自信度を 0〜1。",
   "",
   "CHUNK_SUMMARIES:",
-  JSON.stringify(partials)
-].join("\n");
+  "JSON.stringify(partials)"
+].join("\\n");
 
 
     const finalText = await callResponses({
